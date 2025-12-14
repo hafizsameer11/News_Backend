@@ -1,0 +1,147 @@
+├── prisma
+│   └── schema.prisma
+├── scripts
+│   └── seed-weather-cities.ts
+├── src
+│   ├── config
+│   │   ├── ad-pricing.ts
+│   │   ├── env.ts
+│   │   ├── multer.ts
+│   │   ├── prisma.ts
+│   │   └── swagger.ts
+│   ├── controllers
+│   │   ├── ad.controller.ts
+│   │   ├── auth.controller.ts
+│   │   ├── base.controller.ts
+│   │   ├── bookmark.controller.ts
+│   │   ├── category.controller.ts
+│   │   ├── chat.controller.ts
+│   │   ├── config.controller.ts
+│   │   ├── homepage.controller.ts
+│   │   ├── horoscope.controller.ts
+│   │   ├── media.controller.ts
+│   │   ├── news.controller.ts
+│   │   ├── newsletter.controller.ts
+│   │   ├── payment.controller.ts
+│   │   ├── report.controller.ts
+│   │   ├── search.controller.ts
+│   │   ├── seo.controller.ts
+│   │   ├── sitemap.controller.ts
+│   │   ├── stats.controller.ts
+│   │   ├── structured-data.controller.ts
+│   │   ├── tg.controller.ts
+│   │   ├── transport.controller.ts
+│   │   ├── user.controller.ts
+│   │   ├── video-upload.controller.ts
+│   │   └── weather.controller.ts
+│   ├── jobs
+│   │   ├── ad-expiration.job.ts
+│   │   ├── email-queue.job.ts
+│   │   ├── horoscope.job.ts
+│   │   ├── index.ts
+│   │   ├── social-token-refresh.job.ts
+│   │   ├── types.ts
+│   │   ├── video-processing.job.ts
+│   │   └── weather.job.ts
+│   ├── lib
+│   │   ├── email-templates.ts
+│   │   ├── facebook-client.ts
+│   │   ├── ga4-client.ts
+│   │   ├── image-metadata.ts
+│   │   ├── instagram-client.ts
+│   │   ├── openweather.client.ts
+│   │   ├── redis-client.ts
+│   │   └── video-metadata.ts
+│   ├── middleware
+│   │   ├── asyncHandler.ts
+│   │   ├── auditLog.middleware.ts
+│   │   ├── authGuard.ts
+│   │   ├── errorHandler.ts
+│   │   └── validate.ts
+│   ├── repositories
+│   │   └── base.repository.ts
+│   ├── services
+│   │   ├── ad.service.ts
+│   │   ├── analytics-dashboard.service.ts
+│   │   ├── auth.service.ts
+│   │   ├── base.service.ts
+│   │   ├── bookmark.service.ts
+│   │   ├── breaking-news.service.ts
+│   │   ├── cache.service.ts
+│   │   ├── category.service.ts
+│   │   ├── chat.service.ts
+│   │   ├── email-queue.service.ts
+│   │   ├── email.service.ts
+│   │   ├── export.service.ts
+│   │   ├── homepage.service.ts
+│   │   ├── horoscope.service.ts
+│   │   ├── media.service.ts
+│   │   ├── news.service.ts
+│   │   ├── newsletter.service.ts
+│   │   ├── password.service.ts
+│   │   ├── payment.service.ts
+│   │   ├── report.service.ts
+│   │   ├── search.service.ts
+│   │   ├── seo.service.ts
+│   │   ├── sitemap.service.ts
+│   │   ├── social-webhook.service.ts
+│   │   ├── social.service.ts
+│   │   ├── stats.service.ts
+│   │   ├── structured-data.service.ts
+│   │   ├── tg.service.ts
+│   │   ├── thumbnail.service.ts
+│   │   ├── transport.service.ts
+│   │   ├── user-behavior.service.ts
+│   │   ├── user.service.ts
+│   │   ├── video-processing.service.ts
+│   │   ├── video-upload.service.ts
+│   │   ├── weather-cache.service.ts
+│   │   └── weather.service.ts
+│   ├── templates
+│   │   └── emails
+│   │       ├── ad-approved.hbs
+│   │       ├── ad-rejected.hbs
+│   │       ├── breaking-news.hbs
+│   │       ├── email-verification.hbs
+│   │       ├── newsletter-welcome.hbs
+│   │       └── password-reset.hbs
+│   ├── types
+│   │   ├── enums.ts
+│   │   ├── global.types.ts
+│   │   └── social-errors.ts
+│   ├── utils
+│   │   ├── jwt.ts
+│   │   ├── logger.ts
+│   │   ├── response.ts
+│   │   ├── sanitize.ts
+│   │   └── serialize.ts
+│   ├── validators
+│   │   ├── ad.validators.ts
+│   │   ├── analytics.validators.ts
+│   │   ├── auth.validators.ts
+│   │   ├── category.validators.ts
+│   │   ├── chat.validators.ts
+│   │   ├── homepage.validators.ts
+│   │   ├── news.validators.ts
+│   │   ├── password.validators.ts
+│   │   ├── search.validators.ts
+│   │   ├── seo.validators.ts
+│   │   ├── social.validators.ts
+│   │   ├── user.validators.ts
+│   │   ├── video-upload.validators.ts
+│   │   └── weather.validators.ts
+│   ├── app.ts
+│   └── server.ts
+├── backend.pending.md
+├── backend.progress.md
+├── create-env.js
+├── generate-postman.js
+├── NEWS_NEXT_Postman_Collection.json
+├── package-lock.json
+├── package.json
+├── pending.md
+├── pwsh.ps1
+├── README.md
+├── SETUP.md
+├── tree.txt
+└── tsconfig.json

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ad Approved - {{siteName}}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f4f4f4; padding: 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #1a1a1a; padding: 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 28px;">{{siteName}}</h1>
+            </td>
+          </tr>
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">Your Ad Has Been Approved! ✅</h2>
+              <p style="color: #666666; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                Hello,
+              </p>
+              <p style="color: #666666; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                Great news! Your advertisement "<strong>{{adTitle}}</strong>" has been approved and is now active on {{siteName}}.
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9f9f9; border-radius: 4px; padding: 20px; margin: 20px 0;">
+                <tr>
+                  <td>
+                    <p style="color: #333333; font-size: 14px; margin: 0 0 10px 0;"><strong>Ad Details:</strong></p>
+                    <p style="color: #666666; font-size: 14px; margin: 0 0 5px 0;"><strong>Title:</strong> {{adTitle}}</p>
+                    <p style="color: #666666; font-size: 14px; margin: 0 0 5px 0;"><strong>Type:</strong> {{adType}}</p>
+                    <p style="color: #666666; font-size: 14px; margin: 0 0 5px 0;"><strong>Start Date:</strong> {{adStartDate}}</p>
+                    <p style="color: #666666; font-size: 14px; margin: 0;"><strong>End Date:</strong> {{adEndDate}}</p>
+                  </td>
+                </tr>
+              </table>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="{{adDashboardUrl}}" style="display: inline-block; padding: 14px 32px; background-color: #1a1a1a; color: #ffffff; text-decoration: none; border-radius: 4px; font-size: 16px; font-weight: bold;">View Ad Dashboard</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="color: #666666; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0;">
+                Your ad is now live and will be displayed to our readers. You can track its performance in your advertiser dashboard.
+              </p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f9f9f9; padding: 20px 30px; text-align: center; border-top: 1px solid #eeeeee;">
+              <p style="color: #999999; font-size: 12px; margin: 0;">
+                © {{currentYear}} {{siteName}}. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+

@@ -1,0 +1,572 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  ADVERTISER
+  USER // Regular registered user (optional)
+}
+
+enum NewsStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  ARCHIVED
+  REJECTED
+}
+
+enum Language {
+  EN
+  IT
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum AdType {
+  BANNER_TOP
+  BANNER_SIDE
+  INLINE
+  FOOTER
+  SLIDER
+  TICKER
+  POPUP
+  STICKY
+}
+
+enum AdStatus {
+  PENDING
+  ACTIVE
+  PAUSED
+  EXPIRED
+  REJECTED
+}
+
+enum SocialPlatform {
+  FACEBOOK
+  INSTAGRAM
+}
+
+enum EmailQueueStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+// --------------------------------------
+// User & Auth Models
+// --------------------------------------
+
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String
+  name     String
+  role     Role    @default(USER)
+  avatar   String?
+  isActive Boolean @default(true)
+
+  // Password reset
+  passwordResetToken    String?
+  passwordResetExpires  DateTime?
+
+  // Email verification
+  emailVerified              Boolean   @default(false)
+  emailVerificationToken     String?
+  emailVerificationExpires   DateTime?
+
+  // Editor specific
+  allowedCategories    Category[] @relation("EditorCategories")
+  socialPostingAllowed Boolean    @default(false)
+
+  // Advertiser specific
+  companyName  String?
+  ads          Ad[]
+  transactions Transaction[]
+
+  // Relations
+  newsAuthored     News[]     @relation("NewsAuthor")
+  reports          Report[]
+  auditLogs        AuditLog[]
+  sentMessages     Chat[]     @relation("ChatSender")
+  receivedMessages Chat[]     @relation("ChatReceiver")
+  bookmarks        Bookmark[]
+  uploadedMedia    Media[]    @relation("MediaUploader")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model SocialAccount {
+  id          String         @id @default(uuid())
+  platform    SocialPlatform
+  accountId   String // External ID
+  accessToken String         @db.Text
+  tokenExpiry DateTime?
+  isActive    Boolean        @default(true)
+
+  // Used by Admin/System
+  name String? // Page name
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("social_accounts")
+}
+
+// --------------------------------------
+// Content Management Models
+// --------------------------------------
+
+model Category {
+  id          String     @id @default(uuid())
+  nameEn      String
+  nameIt      String // Manual translation as per SRS
+  slug        String     @unique
+  description String?    @db.Text
+  parentId    String?
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+
+  // Relations
+  news    News[]
+  editors User[] @relation("EditorCategories")
+
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("categories")
+}
+
+model News {
+  id      String @id @default(uuid())
+  title   String
+  slug    String @unique
+  summary String @db.Text
+  content String @db.LongText
+
+  language Language @default(IT) // Default to Italian for Calabria
+
+  // Media
+  mainImage String? // URL
+  gallery   Media[]
+
+  // Metadata
+  isBreaking Boolean @default(false)
+  isFeatured Boolean @default(false)
+  isTG       Boolean @default(false) // Video news
+
+  // Classification
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  tags       String? // Comma separated or JSON
+
+  // Publishing
+  status       NewsStatus @default(DRAFT)
+  publishedAt  DateTime?
+  scheduledFor DateTime?
+
+  // Author
+  authorId String
+  author   User   @relation("NewsAuthor", fields: [authorId], references: [id])
+
+  // Social
+  postedToSocial Boolean         @default(false)
+  socialPostLogs SocialPostLog[]
+
+  // Breaking news alerts
+  breakingNewsAlerts BreakingNewsAlert[]
+
+  // Stats
+  views Int @default(0)
+  viewLogs NewsViewLog[]
+
+  // Bookmarks
+  bookmarks Bookmark[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("news")
+}
+
+model Media {
+  id      String    @id @default(uuid())
+  url     String
+  type    MediaType
+  caption String?
+
+  newsId String?
+  news   News?   @relation(fields: [newsId], references: [id])
+
+  // Uploader tracking
+  uploaderId String?
+  uploader   User?   @relation("MediaUploader", fields: [uploaderId], references: [id])
+
+  // Video metadata (optional, only for VIDEO type)
+  duration         Int?              // Duration in seconds
+  width            Int?              // Width in pixels
+  height           Int?              // Height in pixels
+  fileSize         BigInt?           // File size in bytes
+  thumbnailUrl     String?           // Thumbnail image URL
+  processingStatus ProcessingStatus? @default(PENDING)
+  codec            String?           // Video codec (e.g., "h264", "vp9")
+  bitrate          Int?              // Bitrate in kbps
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("media")
+}
+
+model SocialPostLog {
+  id       String         @id @default(uuid())
+  newsId   String
+  news     News           @relation(fields: [newsId], references: [id])
+  platform SocialPlatform
+  status   String // SUCCESS, FAILED
+  message  String? // Error message or post ID
+  postedAt DateTime       @default(now())
+
+  @@map("social_post_logs")
+}
+
+// --------------------------------------
+// Regional Modules
+// --------------------------------------
+
+model WeatherCity {
+  id       String  @id @default(uuid())
+  name     String  @unique
+  apiId    String? // OpenWeatherMap ID
+  latitude Float?  // Latitude coordinate
+  longitude Float? // Longitude coordinate
+  isActive Boolean @default(true)
+  order    Int     @default(0)
+
+  // Relations
+  weatherCache WeatherCache?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("weather_cities")
+}
+
+model WeatherCache {
+  id        String   @id @default(uuid())
+  cityId    String   @unique
+  city      WeatherCity @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  cityName  String
+  temperature Decimal @db.Decimal(5, 2)
+  condition String
+  humidity  Int
+  windSpeed Decimal @db.Decimal(5, 2)
+  data      String   @db.Text // JSON string for full API response
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([cityId])
+  @@index([updatedAt])
+  @@map("weather_cache")
+}
+
+model Horoscope {
+  id      String   @id @default(uuid())
+  sign    String // Aries, Taurus, etc.
+  date    DateTime @db.Date // For daily
+  content String   @db.Text
+  type    String // DAILY, WEEKLY
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sign, date, type])
+  @@map("horoscopes")
+}
+
+model Transport {
+  id          String  @id @default(uuid())
+  type        String // BUS, TRAIN, TAXI
+  name        String
+  description String? @db.Text
+  contactInfo String?
+  scheduleUrl String?
+  city        String? // Optional filter
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("transports")
+}
+
+// --------------------------------------
+// Advertisement System
+// --------------------------------------
+
+model Ad {
+  id         String @id @default(uuid())
+  title      String
+  type       AdType
+  imageUrl   String @db.VarChar(2048)
+  targetLink String @db.VarChar(2048)
+
+  // Placement
+  position String? // Specific zone code
+
+  // Scheduling
+  startDate DateTime
+  endDate   DateTime
+
+  // Advertiser
+  advertiserId String?
+  advertiser   User?         @relation(fields: [advertiserId], references: [id])
+  transactions Transaction[]
+
+  status AdStatus @default(PENDING)
+  price  Decimal? @db.Decimal(10, 2)
+  isPaid Boolean  @default(false)
+
+  // Admin rejection
+  rejectionReason String? @db.Text
+
+  // Analytics
+  impressions Int @default(0)
+  clicks      Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ads")
+}
+
+model Transaction {
+  id                    String  @id @default(uuid())
+  userId                String
+  user                  User    @relation(fields: [userId], references: [id])
+  adId                  String?
+  ad                    Ad?     @relation(fields: [adId], references: [id])
+  planId                String? // Plan ID (basic, premium, enterprise)
+  amount                Decimal @db.Decimal(10, 2)
+  currency              String  @default("EUR")
+  status                String // PENDING, SUCCEEDED, FAILED, REFUNDED
+  stripePaymentIntentId String?
+  stripeCustomerId      String?
+  stripeChargeId        String?
+  description           String? @db.Text
+  metadata              String? @db.Text // JSON string
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([adId])
+  @@index([status])
+  @@index([stripePaymentIntentId])
+  @@map("transactions")
+}
+
+// --------------------------------------
+// Engagement & System
+// --------------------------------------
+
+model Report {
+  id          String  @id @default(uuid())
+  content     String  @db.Text
+  mediaUrl    String?
+  contactInfo String?
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  isResolved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@map("reports")
+}
+
+model Newsletter {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  isActive       Boolean   @default(true)
+  subscribedAt   DateTime  @default(now())
+  unsubscribedAt DateTime?
+
+  @@map("newsletters")
+}
+
+enum HomepageSectionType {
+  HERO_SLIDER
+  BREAKING_TICKER
+  FEATURED_SECTION
+  CATEGORY_BLOCK
+  MANUAL_LIST
+}
+
+model HomepageSection {
+  id         String              @id @default(uuid())
+  type       HomepageSectionType
+  order      Int                 @default(0)
+  isActive   Boolean             @default(true)
+  title      String?
+  dataSource String? // categoryId, "featured", "manual", etc.
+  config     Json? // Section-specific configuration
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@map("homepage_sections")
+  @@index([order])
+  @@index([isActive])
+}
+
+model Bookmark {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  newsId    String
+  news      News     @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, newsId])
+  @@map("bookmarks")
+  @@index([userId])
+  @@index([newsId])
+}
+
+model AuditLog {
+  id        String  @id @default(uuid())
+  action    String
+  details   String? @db.Text
+  ipAddress String?
+  method    String? // HTTP method (GET, POST, PATCH, DELETE)
+  endpoint  String? // API endpoint
+  userAgent String? // User agent string
+  responseStatus Int? // HTTP response status code
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// --------------------------------------
+// Chat System
+// --------------------------------------
+
+model Chat {
+  id      String  @id @default(uuid())
+  message String  @db.Text
+  isRead  Boolean @default(false)
+
+  senderId String
+  sender   User   @relation("ChatSender", fields: [senderId], references: [id])
+
+  receiverId String
+  receiver   User   @relation("ChatReceiver", fields: [receiverId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+  @@map("chats")
+}
+
+// --------------------------------------
+// Email & Notification System
+// --------------------------------------
+
+model EmailQueue {
+  id          String           @id @default(uuid())
+  to          String
+  subject     String
+  html        String           @db.Text
+  text        String?          @db.Text
+  status      EmailQueueStatus @default(PENDING)
+  retryCount  Int              @default(0)
+  errorMessage String?         @db.Text
+  sentAt      DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("email_queue")
+}
+
+model BreakingNewsAlert {
+  id            String   @id @default(uuid())
+  newsId        String
+  news          News     @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  sentAt        DateTime @default(now())
+  recipientCount Int     @default(0)
+
+  @@unique([newsId])
+  @@index([sentAt])
+  @@map("breaking_news_alerts")
+}
+
+// --------------------------------------
+// Analytics & Tracking Models
+// --------------------------------------
+
+model UserBehaviorEvent {
+  id        String  @id @default(uuid())
+  userId    String? // Optional - can track anonymous users
+  eventType String  // PAGE_VIEW, SEARCH, CLICK, SUBSCRIBE, etc.
+  eventData String? @db.Text // JSON string for event-specific data
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("user_behavior_events")
+}
+
+model NewsViewLog {
+  id        String  @id @default(uuid())
+  newsId    String
+  news      News    @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  userId    String? // Optional - can track anonymous views
+  ipAddress String?
+  userAgent String?
+  viewedAt  DateTime @default(now())
+
+  @@index([newsId])
+  @@index([userId])
+  @@index([viewedAt])
+  @@map("news_view_logs")
+}

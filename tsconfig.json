@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "removeComments": false,
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/config/*": ["src/config/*"],
+      "@/controllers/*": ["src/controllers/*"],
+      "@/services/*": ["src/services/*"],
+      "@/repositories/*": ["src/repositories/*"],
+      "@/middleware/*": ["src/middleware/*"],
+      "@/utils/*": ["src/utils/*"],
+      "@/types/*": ["src/types/*"],
+      "@/queues/*": ["src/queues/*"],
+      "@/workers/*": ["src/workers/*"],
+      "@/validators/*": ["src/validators/*"]
+    }
+  },
+  "include": ["src/**/*", "prisma.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
+
