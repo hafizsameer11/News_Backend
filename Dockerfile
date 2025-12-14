@@ -60,9 +60,9 @@ USER nodejs
 # Expose port (default 3000, can be overridden via env)
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -r tsconfig-paths/register -e "require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+# Health check - use 0.0.0.0 and check the actual port
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node -r tsconfig-paths/register -e "require('http').get('http://0.0.0.0:' + (process.env.PORT || '3000') + '/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
 # Start the application with path alias resolution
 CMD ["node", "-r", "tsconfig-paths/register", "dist/server.js"]
