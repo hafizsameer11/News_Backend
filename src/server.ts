@@ -32,11 +32,11 @@ const startServer = async () => {
     // Create Express app
     const app = createApp();
 
-    // Start server
-    const server = app.listen(env.PORT, () => {
+    // Start server - bind to 0.0.0.0 to accept connections from outside container
+    const server = app.listen(env.PORT, "0.0.0.0", () => {
       logger.info(`🚀 Server running on port ${env.PORT}`);
       logger.info(`📝 Environment: ${env.NODE_ENV}`);
-      logger.info(`🌐 API: http://localhost:${env.PORT}/api`);
+      logger.info(`🌐 API: http://0.0.0.0:${env.PORT}/api`);
 
       // Log Stripe configuration status
       if (env.STRIPE_SECRET_KEY && env.STRIPE_SECRET_KEY !== "sk_test_placeholder") {

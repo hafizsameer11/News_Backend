@@ -23,23 +23,24 @@ export const createApp = (): Express => {
     helmet({
       contentSecurityPolicy: {
         directives: {
-          defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
-          imgSrc: ["'self'", "data:", "https:"],
+          defaultSrc: ["'self'", "*"],
+          styleSrc: ["'self'", "'unsafe-inline'", "*"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "*"],
+          imgSrc: ["'self'", "data:", "https:", "*"],
         },
       },
       crossOriginEmbedderPolicy: false, // Allow embedding for Swagger UI
+      crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
     })
   );
 
   // Compression middleware
   app.use(compression());
 
-  // CORS configuration
+  // CORS configuration - allow all origins
   app.use(
     cors({
-      origin: env.CORS_ORIGIN,
+      origin: true, // Allow all origins
       credentials: true,
     })
   );
@@ -86,7 +87,7 @@ export const createApp = (): Express => {
   app.use(
     "/uploads",
     cors({
-      origin: env.CORS_ORIGIN,
+      origin: true, // Allow all origins
       credentials: true,
     })
   );
