@@ -7,7 +7,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies including OpenSSL for Prisma
-RUN apk add --no-cache libc6-compat openssl1.1-compat
+RUN apk add --no-cache libc6-compat openssl openssl-dev
 
 # Copy package files
 COPY package*.json ./
@@ -40,7 +40,7 @@ WORKDIR /app
 RUN apk add --no-cache \
     libc6-compat \
     vips \
-    openssl1.1-compat \
+    openssl \
     && rm -rf /var/cache/apk/*
 
 # Copy package files
