@@ -45,11 +45,10 @@ RUN apk add --no-cache \
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production && npm cache clean --force
-
-# Install tsconfig-paths for runtime path alias resolution
-RUN npm install tsconfig-paths
+# Install production dependencies and tsconfig-paths (needed for runtime path resolution)
+RUN npm ci --only=production && \
+    npm install tsconfig-paths && \
+    npm cache clean --force
 
 # Copy Prisma files
 COPY prisma ./prisma
@@ -63,8 +62,9 @@ COPY tsconfig.json ./
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Copy start script
+# Copy start script and path registration file
 COPY start.js ./
+COPY register-paths.js ./
 
 # Create uploads directory structure
 RUN mkdir -p uploads/chunks uploads/thumbnails uploads/videos
@@ -84,6 +84,6 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD node -r tsconfig-paths/register -e "require('http').get('http://localhost:' + (process.env.PORT || '3001') + '/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
-# Start the application using the wrapper script
-CMD ["node", "start.js"]
+# Start the application with path alias registration loaded first
+CMD ["node", "-r", "./register-paths.js", "start.js"]
 
