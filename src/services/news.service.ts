@@ -11,10 +11,10 @@ export class NewsService {
   /**
    * Helper function to convert relative URLs to absolute URLs in news objects
    */
-  private convertNewsUrls(news: any) {
+  private convertNewsUrls(news: any): any {
     if (!news) return news;
     if (Array.isArray(news)) {
-      return news.map((item) => this.convertNewsUrls(item));
+      return news.map((item: any) => this.convertNewsUrls(item));
     }
     return {
       ...news,

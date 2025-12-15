@@ -180,7 +180,8 @@ export class MediaService {
     } else {
       // Relative URL provided, convert to absolute
       relativeUrl = url;
-      absoluteUrl = getAbsoluteUrl(url);
+      const convertedUrl = getAbsoluteUrl(url);
+      absoluteUrl = convertedUrl || url; // Fallback to original if conversion fails
     }
 
     // Search for both relative and absolute URLs (for backward compatibility)

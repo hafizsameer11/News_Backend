@@ -40,7 +40,10 @@ export function convertUrlsToAbsolute<T extends Record<string, any>>(obj: T): T 
 
   for (const field of urlFields) {
     if (converted[field] && typeof converted[field] === "string") {
-      converted[field] = getAbsoluteUrl(converted[field]);
+      const absoluteUrl = getAbsoluteUrl(converted[field] as string);
+      if (absoluteUrl !== null) {
+        (converted as Record<string, unknown>)[field] = absoluteUrl;
+      }
     }
   }
 

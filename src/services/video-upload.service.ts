@@ -2,11 +2,9 @@ import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import env from "@/config/env";
-import prisma from "@/config/prisma";
 import { MediaService } from "./media.service";
 import { VideoProcessingService } from "./video-processing.service";
 import { logger } from "@/utils/logger";
-import { getAbsoluteUrl } from "@/utils/url";
 
 const mediaService = new MediaService();
 const videoProcessingService = new VideoProcessingService();

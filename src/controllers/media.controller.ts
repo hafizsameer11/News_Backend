@@ -73,10 +73,27 @@ export const mediaController = {
       return errorResponse(res, "Media is not a video", null, 400);
     }
 
+    if (!media.url) {
+      return errorResponse(res, "Media URL not found", null, 404);
+    }
+
+    // Extract relative path from absolute URL if needed
+    let relativePath = media.url;
+    if (media.url.startsWith("http://") || media.url.startsWith("https://")) {
+      try {
+        const urlObj = new URL(media.url);
+        relativePath = urlObj.pathname;
+      } catch {
+        // If URL parsing fails, try to extract path manually
+        const pathMatch = media.url.match(/\/uploads\/.*/);
+        relativePath = pathMatch ? pathMatch[0] : media.url;
+      }
+    }
+
     // Get file path (remove leading slash if present)
     const filePath = path.join(
       process.cwd(),
-      media.url.startsWith("/") ? media.url.slice(1) : media.url
+      relativePath.startsWith("/") ? relativePath.slice(1) : relativePath
     );
 
     // Check if file exists
