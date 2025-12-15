@@ -27,7 +27,12 @@ export class MediaService {
       type === MediaType.VIDEO ? `/uploads/videos/${file.filename}` : `/uploads/${file.filename}`;
 
     // Convert to absolute URL for database storage
-    const absoluteUrl = getAbsoluteUrl(relativePath);
+    // getAbsoluteUrl() already handles production URL fallback, but ensure we never save localhost URLs
+    let absoluteUrl = getAbsoluteUrl(relativePath);
+    if (!absoluteUrl || absoluteUrl.includes("localhost") || absoluteUrl.includes("127.0.0.1")) {
+      // Final fallback: use production URL if we still got localhost
+      absoluteUrl = `https://news-backend.hmstech.org${relativePath}`;
+    }
 
     // Base data object - save absolute URL to database
     const data: any = {

@@ -19,7 +19,20 @@ export function getAbsoluteUrl(relativeUrl: string | null | undefined): string |
   const normalizedUrl = relativeUrl.startsWith("/") ? relativeUrl : `/${relativeUrl}`;
 
   // Get backend URL and remove trailing slash if present
-  const backendUrl = env.BACKEND_URL.replace(/\/$/, "");
+  let backendUrl = env.BACKEND_URL.replace(/\/$/, "");
+  
+  // ALWAYS use production URL in production environment, or if BACKEND_URL is localhost
+  // This ensures all URLs are stored with the production domain
+  if (
+    process.env.NODE_ENV === "production" ||
+    !backendUrl ||
+    backendUrl.includes("localhost") ||
+    backendUrl.includes("127.0.0.1") ||
+    backendUrl.startsWith("http://localhost") ||
+    backendUrl.startsWith("http://127.0.0.1")
+  ) {
+    backendUrl = "https://news-backend.hmstech.org";
+  }
 
   return `${backendUrl}${normalizedUrl}`;
 }
