@@ -2,7 +2,7 @@ import express, { Express } from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import swaggerUi from "swagger-ui-express";
-import helmet from "helmet";
+// import helmet from "helmet"; // Disabled to avoid CORS conflicts
 import compression from "compression";
 import path from "path";
 import env from "@/config/env";
@@ -69,18 +69,35 @@ export const createApp = (): Express => {
     next();
   });
 
-  // Security middleware (Helmet) - configured to allow cross-origin requests
-  // Must be after CORS to avoid overriding CORS headers
-  app.use(
-    helmet({
-      contentSecurityPolicy: false, // Disable CSP to avoid conflicts with CORS
-      crossOriginEmbedderPolicy: false, // Allow embedding for Swagger UI
-      crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
-      crossOriginOpenerPolicy: false, // Allow cross-origin opener
-      referrerPolicy: false, // Disable Referrer-Policy to avoid strict-origin-when-cross-origin
-      strictTransportSecurity: false, // Disable HSTS for development (can enable in production if needed)
-    })
-  );
+  // Completely disable Helmet to avoid any CORS/header conflicts
+  // Helmet can interfere with CORS by setting restrictive headers
+  // We'll handle security headers manually if needed
+  // app.use(helmet());
+
+  // Middleware to remove any restrictive headers and ensure CORS is always set
+  app.use((_req, res, next) => {
+    // Remove Referrer-Policy header if it exists (Helmet or browser default)
+    try {
+      res.removeHeader("Referrer-Policy");
+    } catch (e) {
+      // Header might not exist, ignore
+    }
+    // Ensure CORS headers are always present
+    const origin = _req.headers.origin;
+    if (origin) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.header("Access-Control-Allow-Origin", "*");
+    }
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
+    );
+    res.header("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
+    next();
+  });
 
   // Compression middleware
   app.use(compression());
