@@ -4,6 +4,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import env from "@/config/env";
 import { extractVideoMetadata } from "@/lib/video-metadata";
+import { getAbsoluteUrl } from "@/utils/url";
 
 const execAsync = promisify(exec);
 
@@ -69,7 +70,7 @@ export class ThumbnailService {
   }
 
   /**
-   * Generate thumbnail and return relative URL
+   * Generate thumbnail and return absolute URL
    * @param videoPath - Path to video file
    * @param videoId - Media ID for naming
    */
@@ -81,8 +82,9 @@ export class ThumbnailService {
 
     await this.generateThumbnail(videoPath, absolutePath);
 
-    // Return relative URL
-    return `/${thumbnailPath.replace(/\\/g, "/")}`;
+    // Return absolute URL for database storage
+    const relativeUrl = `/${thumbnailPath.replace(/\\/g, "/")}`;
+    return getAbsoluteUrl(relativeUrl) || relativeUrl;
   }
 
   /**
@@ -111,7 +113,9 @@ export class ThumbnailService {
         await execAsync(command);
 
         if (fs.existsSync(absolutePath)) {
-          urls.push(`/${thumbnailPath.replace(/\\/g, "/")}`);
+          const relativeUrl = `/${thumbnailPath.replace(/\\/g, "/")}`;
+          const absoluteUrl = getAbsoluteUrl(relativeUrl) || relativeUrl;
+          urls.push(absoluteUrl);
         }
       } catch (error) {
         console.error(`Error generating thumbnail size ${size.suffix}:`, error);

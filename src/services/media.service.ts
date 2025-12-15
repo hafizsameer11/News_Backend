@@ -133,6 +133,7 @@ export class MediaService {
     const mediaWithAbsoluteUrls = media.map((item) => ({
       ...item,
       url: getAbsoluteUrl(item.url), // Handles both relative and absolute URLs
+      thumbnailUrl: item.thumbnailUrl ? getAbsoluteUrl(item.thumbnailUrl) : null, // Convert thumbnail URL too
     }));
 
     return {
@@ -152,10 +153,11 @@ export class MediaService {
   async getMediaById(id: string) {
     const media = await prisma.media.findUnique({ where: { id } });
     if (!media) return null;
-    // Ensure URL is absolute (handles both relative and absolute URLs for backward compatibility)
+    // Ensure URLs are absolute (handles both relative and absolute URLs for backward compatibility)
     return {
       ...media,
       url: getAbsoluteUrl(media.url),
+      thumbnailUrl: media.thumbnailUrl ? getAbsoluteUrl(media.thumbnailUrl) : null,
     };
   }
 
@@ -371,9 +373,22 @@ export class MediaService {
 
       // Delete thumbnail if exists
       if (media.thumbnailUrl) {
+        // Extract relative path from absolute URL if needed
+        let relativePath = media.thumbnailUrl;
+        if (media.thumbnailUrl.startsWith("http://") || media.thumbnailUrl.startsWith("https://")) {
+          try {
+            const urlObj = new URL(media.thumbnailUrl);
+            relativePath = urlObj.pathname;
+          } catch {
+            // If URL parsing fails, try to extract path manually
+            const pathMatch = media.thumbnailUrl.match(/\/uploads\/.*/);
+            relativePath = pathMatch ? pathMatch[0] : media.thumbnailUrl;
+          }
+        }
+        
         const thumbnailPath = path.join(
           process.cwd(),
-          media.thumbnailUrl.startsWith("/") ? media.thumbnailUrl.slice(1) : media.thumbnailUrl
+          relativePath.startsWith("/") ? relativePath.slice(1) : relativePath
         );
         if (fs.existsSync(thumbnailPath)) {
           fs.unlinkSync(thumbnailPath);

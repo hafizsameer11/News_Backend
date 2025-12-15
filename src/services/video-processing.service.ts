@@ -42,10 +42,23 @@ export class VideoProcessingService {
     });
 
     try {
-      // Get video file path
+      // Get video file path - handle both absolute and relative URLs
+      let relativePath = media.url;
+      if (media.url.startsWith("http://") || media.url.startsWith("https://")) {
+        // Extract path from absolute URL
+        try {
+          const urlObj = new URL(media.url);
+          relativePath = urlObj.pathname;
+        } catch {
+          // If URL parsing fails, try to extract path manually
+          const pathMatch = media.url.match(/\/uploads\/.*/);
+          relativePath = pathMatch ? pathMatch[0] : media.url;
+        }
+      }
+      
       const videoPath = path.join(
         process.cwd(),
-        media.url.startsWith("/") ? media.url.slice(1) : media.url
+        relativePath.startsWith("/") ? relativePath.slice(1) : relativePath
       );
 
       if (!fs.existsSync(videoPath)) {
