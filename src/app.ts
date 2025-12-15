@@ -50,22 +50,21 @@ export const createApp = (): Express => {
     })
   );
 
-  // Global CORS headers middleware - ensure all responses have CORS headers (before Helmet)
+  // Additional CORS middleware layer - ensures headers are set even if first layer misses
   app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (origin) {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
     } else {
-      // For requests without origin (like same-origin, Postman, etc.)
-      res.header("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Origin", "*");
     }
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-    res.header(
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    res.setHeader(
       "Access-Control-Allow-Headers",
       "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
     );
-    res.header("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
     next();
   });
 
@@ -74,28 +73,35 @@ export const createApp = (): Express => {
   // We'll handle security headers manually if needed
   // app.use(helmet());
 
-  // Middleware to remove any restrictive headers and ensure CORS is always set
-  app.use((_req, res, next) => {
-    // Remove Referrer-Policy header if it exists (Helmet or browser default)
-    try {
-      res.removeHeader("Referrer-Policy");
-    } catch (e) {
-      // Header might not exist, ignore
-    }
-    // Ensure CORS headers are always present
-    const origin = _req.headers.origin;
+  // CRITICAL: Middleware to set permissive headers and ensure CORS on ALL responses
+  // This MUST run on every request to override any restrictive headers
+  app.use((req, res, next) => {
+    // Set permissive Referrer-Policy (explicitly set to avoid browser defaults)
+    res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+    
+    // Remove any restrictive CORS-related headers
+    res.removeHeader("Cross-Origin-Embedder-Policy");
+    res.removeHeader("Cross-Origin-Opener-Policy");
+    
+    // ALWAYS set CORS headers on every response
+    const origin = req.headers.origin;
     if (origin) {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
     } else {
-      res.header("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Origin", "*");
     }
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-    res.header(
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    res.setHeader(
       "Access-Control-Allow-Headers",
       "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
     );
-    res.header("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
+    res.setHeader("Access-Control-Max-Age", "86400");
+    
+    // Set Cross-Origin-Resource-Policy to permissive
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    
     next();
   });
 
@@ -104,19 +110,23 @@ export const createApp = (): Express => {
 
   // Handle preflight requests explicitly for all routes (must be after CORS setup)
   app.options("*", (req, res) => {
+    // Set permissive Referrer-Policy
+    res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+    
     const origin = req.headers.origin;
     if (origin) {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
     } else {
-      res.header("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Origin", "*");
     }
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-    res.header(
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    res.setHeader(
       "Access-Control-Allow-Headers",
       "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
     );
-    res.header("Access-Control-Max-Age", "86400");
+    res.setHeader("Access-Control-Max-Age", "86400");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     res.sendStatus(204);
   });
 
@@ -196,13 +206,16 @@ export const createApp = (): Express => {
 
   // Root endpoint
   app.get("/", (req, res) => {
+    // Set permissive Referrer-Policy
+    res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+    
     // Ensure CORS headers are set
     const origin = req.headers.origin;
     if (origin) {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
     } else {
-      res.header("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Origin", "*");
     }
     res.json({
       message: "NEWS NEXT Backend API",
@@ -213,13 +226,16 @@ export const createApp = (): Express => {
 
   // 404 handler
   app.use((req, res) => {
+    // Set permissive Referrer-Policy
+    res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+    
     // Ensure CORS headers are set even for 404 responses
     const origin = req.headers.origin;
     if (origin) {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
     } else {
-      res.header("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Origin", "*");
     }
     res.status(404).json({
       success: false,

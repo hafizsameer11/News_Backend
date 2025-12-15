@@ -11,19 +11,24 @@ import { Prisma } from "@prisma/client";
 export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction) => {
   logger.error("Error:", err);
 
+  // Set permissive Referrer-Policy
+  res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+
   // Ensure CORS headers are set even on error responses
   const origin = req.headers.origin;
   if (origin) {
-    res.header("Access-Control-Allow-Origin", origin);
-    res.header("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   } else {
-    res.header("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Origin", "*");
   }
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-  res.header(
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+  res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token"
+    "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
   );
+  res.setHeader("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
 
   // Zod validation errors
   if (err instanceof ZodError) {
