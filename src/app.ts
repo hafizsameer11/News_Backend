@@ -76,14 +76,46 @@ export const createApp = (): Express => {
   // CRITICAL: Middleware to set permissive headers and ensure CORS on ALL responses
   // This MUST run on every request to override any restrictive headers
   app.use((req, res, next) => {
-    // Set permissive Referrer-Policy (explicitly set to avoid browser defaults)
-    res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+    // Intercept response.end() to ensure headers are set right before sending
+    const originalEnd = res.end.bind(res);
+    res.end = function (chunk?: any, encoding?: any, cb?: any) {
+      // Force set permissive Referrer-Policy (most permissive option)
+      res.setHeader("Referrer-Policy", "unsafe-url");
+      
+      // Remove any restrictive CORS-related headers
+      try {
+        res.removeHeader("Cross-Origin-Embedder-Policy");
+        res.removeHeader("Cross-Origin-Opener-Policy");
+      } catch (e) {
+        // Ignore if headers don't exist
+      }
+      
+      // ALWAYS set CORS headers on every response
+      const origin = req.headers.origin;
+      if (origin) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+      } else {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+      }
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
+      );
+      res.setHeader("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
+      res.setHeader("Access-Control-Max-Age", "86400");
+      
+      // Set Cross-Origin-Resource-Policy to permissive
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      
+      return originalEnd.call(this, chunk, encoding, cb);
+    };
     
-    // Remove any restrictive CORS-related headers
-    res.removeHeader("Cross-Origin-Embedder-Policy");
-    res.removeHeader("Cross-Origin-Opener-Policy");
+    // Also set headers immediately
+    res.setHeader("Referrer-Policy", "unsafe-url");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     
-    // ALWAYS set CORS headers on every response
     const origin = req.headers.origin;
     if (origin) {
       res.setHeader("Access-Control-Allow-Origin", origin);
@@ -91,16 +123,6 @@ export const createApp = (): Express => {
     } else {
       res.setHeader("Access-Control-Allow-Origin", "*");
     }
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
-    );
-    res.setHeader("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
-    res.setHeader("Access-Control-Max-Age", "86400");
-    
-    // Set Cross-Origin-Resource-Policy to permissive
-    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     
     next();
   });
@@ -110,8 +132,8 @@ export const createApp = (): Express => {
 
   // Handle preflight requests explicitly for all routes (must be after CORS setup)
   app.options("*", (req, res) => {
-    // Set permissive Referrer-Policy
-    res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+    // Set most permissive Referrer-Policy
+    res.setHeader("Referrer-Policy", "unsafe-url");
     
     const origin = req.headers.origin;
     if (origin) {
@@ -206,8 +228,8 @@ export const createApp = (): Express => {
 
   // Root endpoint
   app.get("/", (req, res) => {
-    // Set permissive Referrer-Policy
-    res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+    // Set most permissive Referrer-Policy
+    res.setHeader("Referrer-Policy", "unsafe-url");
     
     // Ensure CORS headers are set
     const origin = req.headers.origin;
@@ -226,8 +248,8 @@ export const createApp = (): Express => {
 
   // 404 handler
   app.use((req, res) => {
-    // Set permissive Referrer-Policy
-    res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+    // Set most permissive Referrer-Policy
+    res.setHeader("Referrer-Policy", "unsafe-url");
     
     // Ensure CORS headers are set even for 404 responses
     const origin = req.headers.origin;
@@ -245,6 +267,7 @@ export const createApp = (): Express => {
 
   // Global error handler (must be last)
   app.use(errorHandler);
+
 
   return app;
 };

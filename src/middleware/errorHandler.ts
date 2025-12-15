@@ -11,8 +11,8 @@ import { Prisma } from "@prisma/client";
 export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction) => {
   logger.error("Error:", err);
 
-  // Set permissive Referrer-Policy
-  res.setHeader("Referrer-Policy", "no-referrer-when-downgrade");
+  // Set most permissive Referrer-Policy
+  res.setHeader("Referrer-Policy", "unsafe-url");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
 
   // Ensure CORS headers are set even on error responses
