@@ -21,19 +21,12 @@ export const createApp = (): Express => {
   // Security middleware (Helmet) - configured to allow cross-origin requests
   app.use(
     helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'", "*"],
-          styleSrc: ["'self'", "'unsafe-inline'", "*"],
-          scriptSrc: ["'self'", "'unsafe-inline'", "*"],
-          imgSrc: ["'self'", "data:", "https:", "*"],
-          connectSrc: ["'self'", "*"],
-          fontSrc: ["'self'", "*"],
-        },
-      },
+      contentSecurityPolicy: false, // Disable CSP to avoid conflicts with CORS
       crossOriginEmbedderPolicy: false, // Allow embedding for Swagger UI
       crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
       crossOriginOpenerPolicy: false, // Allow cross-origin opener
+      // Disable strict transport security for development (can enable in production if needed)
+      strictTransportSecurity: false,
     })
   );
 
@@ -41,25 +34,71 @@ export const createApp = (): Express => {
   app.use(compression());
 
   // CORS configuration - allow all origins
+  // When credentials: true, we must reflect the specific origin, not use "*"
   app.use(
     cors({
-      origin: true, // Allow all origins
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps, Postman, etc.)
+        if (!origin) {
+          return callback(null, true);
+        }
+        // Allow all origins
+        callback(null, true);
+      },
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-CSRF-Token"],
-      exposedHeaders: ["Content-Range", "X-Content-Range"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "X-Requested-With",
+        "Accept",
+        "Origin",
+        "X-CSRF-Token",
+        "Cache-Control",
+        "Pragma",
+      ],
+      exposedHeaders: ["Content-Range", "X-Content-Range", "Content-Length"],
       preflightContinue: false,
       optionsSuccessStatus: 204,
+      maxAge: 86400, // 24 hours
     })
   );
 
-  // Handle preflight requests explicitly
+  // Handle preflight requests explicitly for all routes
   app.options("*", (req, res) => {
-    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    const origin = req.headers.origin;
+    if (origin) {
+      res.header("Access-Control-Allow-Origin", origin);
+    } else {
+      res.header("Access-Control-Allow-Origin", "*");
+    }
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
+    );
     res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Access-Control-Max-Age", "86400");
     res.sendStatus(204);
+  });
+
+  // Global CORS headers middleware - ensure all responses have CORS headers
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Access-Control-Allow-Credentials", "true");
+    } else {
+      // For requests without origin (like same-origin, Postman, etc.)
+      res.header("Access-Control-Allow-Origin", "*");
+    }
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
+    );
+    res.header("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
+    next();
   });
 
   // Documentation
@@ -114,12 +153,19 @@ export const createApp = (): Express => {
   // Override Cross-Origin headers for static files to allow cross-origin access
   app.use("/uploads", (req, res, next) => {
     res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-    // Reflect the origin from the request (allows any origin)
-    const origin = req.headers.origin || "*";
-    res.setHeader("Access-Control-Allow-Origin", origin);
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token"
+    );
+    res.setHeader("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
     next();
   });
 
