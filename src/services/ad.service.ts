@@ -1,6 +1,7 @@
 import prisma from "@/config/prisma";
 import env from "@/config/env";
 import Stripe from "stripe";
+import { Prisma } from "@prisma/client";
 import { ROLE } from "@/types/enums";
 import { calculateAdPrice, MIN_AD_DURATION_DAYS, MAX_AD_DURATION_DAYS } from "@/config/ad-pricing";
 import { emailService } from "./email.service";
@@ -260,9 +261,23 @@ export class AdService {
 
     // Calculate price using configurable rates
     // Allow price override if provided (admin can set custom price)
-    const calculatedPrice = data.price
-      ? Number(data.price)
+    const priceValue = data.price
+      ? (typeof data.price === "string" ? parseFloat(data.price) : data.price)
       : calculateAdPrice(data.type, start, end);
+
+    // Validate price is a valid number
+    if (isNaN(priceValue) || priceValue < 0) {
+      throw new Error("Price must be a valid positive number");
+    }
+
+    // Validate price doesn't exceed database limit (Decimal(10, 2) = 99,999,999.99)
+    const MAX_PRICE = 99999999.99;
+    if (priceValue > MAX_PRICE) {
+      throw new Error(`Price cannot exceed ${MAX_PRICE.toLocaleString()}`);
+    }
+
+    // Round to 2 decimal places and convert to Decimal type
+    const calculatedPrice = new Prisma.Decimal(Math.round(priceValue * 100) / 100);
 
     return await prisma.ad.create({
       data: {
@@ -356,9 +371,59 @@ export class AdService {
       throw new Error("Unauthorized");
     }
 
+    // Prepare update data with proper type conversions
+    const updateData: any = { ...data };
+
+    // Track if price was explicitly provided
+    const priceWasProvided = updateData.price !== undefined;
+    let processedPrice: Prisma.Decimal | undefined;
+
+    // Handle price conversion - Decimal(10, 2) can store up to 99,999,999.99
+    if (priceWasProvided) {
+      // Convert to number if it's a string
+      const priceValue = typeof updateData.price === "string" ? parseFloat(updateData.price) : updateData.price;
+      
+      // Validate price is a valid number
+      if (isNaN(priceValue) || priceValue < 0) {
+        throw new Error("Price must be a valid positive number");
+      }
+
+      // Validate price doesn't exceed database limit (Decimal(10, 2) = 99,999,999.99)
+      const MAX_PRICE = 99999999.99;
+      if (priceValue > MAX_PRICE) {
+        throw new Error(`Price cannot exceed ${MAX_PRICE.toLocaleString()}`);
+      }
+
+      // Round to 2 decimal places and convert to Decimal type
+      processedPrice = new Prisma.Decimal(Math.round(priceValue * 100) / 100);
+    }
+
+    // Handle date conversions if dates are being updated
+    if (updateData.startDate) {
+      updateData.startDate = new Date(updateData.startDate);
+    }
+    if (updateData.endDate) {
+      updateData.endDate = new Date(updateData.endDate);
+    }
+
+    // Recalculate price if dates or type changed (only if price wasn't explicitly provided)
+    if (!priceWasProvided && (updateData.startDate || updateData.endDate || updateData.type)) {
+      const startDate = updateData.startDate ? new Date(updateData.startDate) : new Date(ad.startDate);
+      const endDate = updateData.endDate ? new Date(updateData.endDate) : new Date(ad.endDate);
+      const adType = updateData.type || ad.type;
+
+      const calculatedPrice = calculateAdPrice(adType, startDate, endDate);
+      processedPrice = new Prisma.Decimal(Math.round(calculatedPrice * 100) / 100);
+    }
+
+    // Set the processed price if we have one
+    if (processedPrice !== undefined) {
+      updateData.price = processedPrice;
+    }
+
     return await prisma.ad.update({
       where: { id },
-      data,
+      data: updateData,
     });
   }
 

@@ -140,6 +140,11 @@ export const updateAdValidator = z
         status: AdStatusEnum.optional(),
         startDate: z.string().datetime("Invalid start date format").optional(),
         endDate: z.string().datetime("Invalid end date format").optional(),
+        price: z
+          .number()
+          .positive("Price must be a positive number")
+          .max(99999999.99, "Price cannot exceed 99,999,999.99")
+          .optional(),
       })
       .refine(
         (data) => {
