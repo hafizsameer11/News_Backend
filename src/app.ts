@@ -18,7 +18,7 @@ import { swaggerSpec } from "@/config/swagger";
 export const createApp = (): Express => {
   const app = express();
 
-  // Security middleware (Helmet)
+  // Security middleware (Helmet) - configured to allow cross-origin requests
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -27,10 +27,13 @@ export const createApp = (): Express => {
           styleSrc: ["'self'", "'unsafe-inline'", "*"],
           scriptSrc: ["'self'", "'unsafe-inline'", "*"],
           imgSrc: ["'self'", "data:", "https:", "*"],
+          connectSrc: ["'self'", "*"],
+          fontSrc: ["'self'", "*"],
         },
       },
       crossOriginEmbedderPolicy: false, // Allow embedding for Swagger UI
       crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
+      crossOriginOpenerPolicy: false, // Allow cross-origin opener
     })
   );
 
@@ -42,8 +45,22 @@ export const createApp = (): Express => {
     cors({
       origin: true, // Allow all origins
       credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin", "X-CSRF-Token"],
+      exposedHeaders: ["Content-Range", "X-Content-Range"],
+      preflightContinue: false,
+      optionsSuccessStatus: 204,
     })
   );
+
+  // Handle preflight requests explicitly
+  app.options("*", (req, res) => {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.sendStatus(204);
+  });
 
   // Documentation
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -89,12 +106,20 @@ export const createApp = (): Express => {
     cors({
       origin: true, // Allow all origins
       credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
     })
   );
 
-  // Override Cross-Origin-Resource-Policy for static files (Helmet sets it to "same-origin" by default)
-  app.use("/uploads", (_req, res, next) => {
+  // Override Cross-Origin headers for static files to allow cross-origin access
+  app.use("/uploads", (req, res, next) => {
     res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    // Reflect the origin from the request (allows any origin)
+    const origin = req.headers.origin || "*";
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
     next();
   });
 

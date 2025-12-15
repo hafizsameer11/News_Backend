@@ -1,14 +1,19 @@
-# Stage 1: Build stage
+# ============================================
+# Stage 1: Build Stage
+# ============================================
 FROM node:20-alpine AS builder
 
 # Set working directory
 WORKDIR /app
 
+# Install build dependencies
+RUN apk add --no-cache libc6-compat
+
 # Copy package files
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install dependencies
+# Install all dependencies (including dev dependencies for build)
 RUN npm ci
 
 # Copy Prisma schema
@@ -23,21 +28,33 @@ COPY src ./src
 # Build TypeScript code
 RUN npm run build
 
-# Stage 2: Production stage
+# ============================================
+# Stage 2: Production Stage
+# ============================================
 FROM node:20-alpine AS production
 
 # Set working directory
 WORKDIR /app
 
-# Install production dependencies only
+# Install runtime dependencies for native modules (sharp, etc.)
+RUN apk add --no-cache \
+    libc6-compat \
+    vips \
+    && rm -rf /var/cache/apk/*
+
+# Copy package files
 COPY package*.json ./
+
+# Install production dependencies only
 RUN npm ci --only=production && npm cache clean --force
 
 # Install tsconfig-paths for runtime path alias resolution
 RUN npm install tsconfig-paths
 
-# Copy Prisma files and generate client
+# Copy Prisma files
 COPY prisma ./prisma
+
+# Generate Prisma Client for production
 RUN npx prisma generate
 
 # Copy tsconfig.json for path resolution
@@ -46,7 +63,7 @@ COPY tsconfig.json ./
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 
-# Create uploads directory
+# Create uploads directory structure
 RUN mkdir -p uploads/chunks uploads/thumbnails uploads/videos
 
 # Create non-root user for security
@@ -57,12 +74,12 @@ RUN addgroup -g 1001 -S nodejs && \
 # Switch to non-root user
 USER nodejs
 
-# Expose port (default 3000, can be overridden via env)
-EXPOSE 3000
+# Expose port (default 3001, can be overridden via env)
+EXPOSE 3001
 
-# Health check - use 0.0.0.0 and check the actual port
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -r tsconfig-paths/register -e "require('http').get('http://0.0.0.0:' + (process.env.PORT || '3000') + '/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
+  CMD node -r tsconfig-paths/register -e "require('http').get('http://localhost:' + (process.env.PORT || '3001') + '/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
 # Start the application with path alias resolution
 CMD ["node", "-r", "tsconfig-paths/register", "dist/server.js"]

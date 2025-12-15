@@ -15,41 +15,19 @@ import { emailQueueJob } from "@/jobs/email-queue.job";
  */
 const startServer = async () => {
   try {
-    // Test database connection with retries
-    const maxRetries = 5;
-    const retryDelay = 2000; // 2 seconds
+    // Test database connection
+    await prisma.$connect();
+    logger.info("✅ Database connected successfully");
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        await prisma.$connect();
-        logger.info("✅ Database connected successfully");
-        break;
-      } catch (error: any) {
-        logger.warn(`Database connection attempt ${attempt}/${maxRetries} failed: ${error.message}`);
-        if (attempt < maxRetries) {
-          logger.info(`Retrying in ${retryDelay}ms...`);
-          await new Promise((resolve) => setTimeout(resolve, retryDelay));
-        } else {
-          logger.error("❌ Failed to connect to database after all retries. Server will start but database operations may fail.");
-          // Continue anyway - let health check endpoint handle it
-        }
-      }
-    }
-
-    // Register and start scheduled jobs (non-blocking - don't fail if jobs fail)
-    try {
-      jobScheduler.registerJob(weatherUpdateJob);
-      jobScheduler.registerJob(horoscopeDailyJob);
-      jobScheduler.registerJob(horoscopeWeeklyJob);
-      jobScheduler.registerJob(adExpirationJob);
-      jobScheduler.registerJob(videoProcessingJob);
-      jobScheduler.registerJob(socialTokenRefreshJob);
-      jobScheduler.registerJob(emailQueueJob);
-      jobScheduler.start();
-      logger.info("✅ Scheduled jobs registered and started");
-    } catch (error: any) {
-      logger.warn(`⚠️  Failed to register some scheduled jobs: ${error.message}. Server will continue.`);
-    }
+    // Register and start scheduled jobs
+    jobScheduler.registerJob(weatherUpdateJob);
+    jobScheduler.registerJob(horoscopeDailyJob);
+    jobScheduler.registerJob(horoscopeWeeklyJob);
+    jobScheduler.registerJob(adExpirationJob);
+    jobScheduler.registerJob(videoProcessingJob);
+    jobScheduler.registerJob(socialTokenRefreshJob);
+    jobScheduler.registerJob(emailQueueJob);
+    jobScheduler.start();
 
     // Create Express app
     const app = createApp();
