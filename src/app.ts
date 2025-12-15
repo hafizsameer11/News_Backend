@@ -5,6 +5,7 @@ import swaggerUi from "swagger-ui-express";
 // import helmet from "helmet"; // Disabled to avoid CORS conflicts
 import compression from "compression";
 import path from "path";
+import fs from "fs";
 import env from "@/config/env";
 import routes from "@/routes";
 import { errorHandler } from "@/middleware/errorHandler";
@@ -206,7 +207,62 @@ export const createApp = (): Express => {
   });
 
   // Serve static uploads (before API routes to avoid versioning)
-  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+  // Use absolute path and ensure proper configuration
+  const uploadsPath = path.join(process.cwd(), "uploads");
+  
+  // Verify uploads directory exists
+  if (!fs.existsSync(uploadsPath)) {
+    logger.warn(`⚠️  Uploads directory not found at ${uploadsPath}, creating it...`);
+    fs.mkdirSync(uploadsPath, { recursive: true });
+    // Also create subdirectories
+    fs.mkdirSync(path.join(uploadsPath, "videos"), { recursive: true });
+    fs.mkdirSync(path.join(uploadsPath, "thumbnails"), { recursive: true });
+    fs.mkdirSync(path.join(uploadsPath, "chunks"), { recursive: true });
+  }
+  
+  app.use(
+    "/uploads",
+    express.static(uploadsPath, {
+      dotfiles: "ignore",
+      etag: true,
+      extensions: ["jpg", "jpeg", "png", "gif", "webp", "mp4", "webm", "mov", "avi", "mkv"],
+      index: false,
+      maxAge: "1y",
+      setHeaders: (res, filePath) => {
+        // Set proper content type
+        if (filePath.endsWith(".mp4") || filePath.endsWith(".webm")) {
+          res.setHeader("Content-Type", "video/mp4");
+        }
+        // Ensure CORS headers are set
+        const origin = (res.req as any).headers?.origin;
+        if (origin) {
+          res.setHeader("Access-Control-Allow-Origin", origin);
+          res.setHeader("Access-Control-Allow-Credentials", "true");
+        } else {
+          res.setHeader("Access-Control-Allow-Origin", "*");
+        }
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        res.setHeader("Referrer-Policy", "unsafe-url");
+      },
+    })
+  );
+  
+  // Log uploads directory path for debugging
+  logger.info(`📁 Static uploads directory: ${uploadsPath}`);
+  logger.info(`📁 Uploads directory exists: ${fs.existsSync(uploadsPath)}`);
+  
+  // Test route to verify static file serving (for debugging)
+  app.get("/uploads/test", (_req, res) => {
+    const testFiles = fs.existsSync(uploadsPath) 
+      ? fs.readdirSync(uploadsPath).slice(0, 5)
+      : [];
+    res.json({
+      uploadsPath,
+      exists: fs.existsSync(uploadsPath),
+      files: testFiles,
+      message: "Static file serving is configured",
+    });
+  });
 
   // API routes (versioned)
   app.use("/api/v1", routes);
@@ -231,8 +287,20 @@ export const createApp = (): Express => {
     });
   });
 
-  // 404 handler
+  // 404 handler (only for non-static file routes)
   app.use((req, res) => {
+    // Skip 404 for static file requests (they should be handled by express.static)
+    // If we reach here for /uploads, it means the file doesn't exist
+    if (req.path.startsWith("/uploads")) {
+      // File not found in uploads directory
+      res.status(404).json({
+        success: false,
+        message: "File not found",
+        path: req.path,
+      });
+      return;
+    }
+    
     // Set most permissive Referrer-Policy
     res.setHeader("Referrer-Policy", "unsafe-url");
     

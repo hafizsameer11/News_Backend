@@ -38,10 +38,14 @@ export function getAbsoluteUrl(relativeUrl: string | null | undefined): string |
   }
 
   // Normalize URL first to remove any duplicate prefixes
-  const normalizedInput = normalizeUrl(relativeUrl);
+  let normalizedInput = normalizeUrl(relativeUrl);
 
-  // If already an absolute URL, return normalized version
+  // If already an absolute URL, normalize protocol and return
   if (normalizedInput.startsWith("http://") || normalizedInput.startsWith("https://")) {
+    // Ensure production domain uses HTTPS
+    if (normalizedInput.includes("news-backend.hmstech.org") && normalizedInput.startsWith("http://")) {
+      normalizedInput = normalizedInput.replace("http://", "https://");
+    }
     return normalizedInput;
   }
 
@@ -53,15 +57,22 @@ export function getAbsoluteUrl(relativeUrl: string | null | undefined): string |
   
   // ALWAYS use production URL in production environment, or if BACKEND_URL is localhost
   // This ensures all URLs are stored with the production domain
+  // Also ensure we use HTTPS in production
   if (
     process.env.NODE_ENV === "production" ||
     !backendUrl ||
     backendUrl.includes("localhost") ||
     backendUrl.includes("127.0.0.1") ||
     backendUrl.startsWith("http://localhost") ||
-    backendUrl.startsWith("http://127.0.0.1")
+    backendUrl.startsWith("http://127.0.0.1") ||
+    (backendUrl.includes("news-backend.hmstech.org") && backendUrl.startsWith("http://"))
   ) {
     backendUrl = "https://news-backend.hmstech.org";
+  }
+  
+  // Normalize http:// to https:// for production domain
+  if (backendUrl.includes("news-backend.hmstech.org") && backendUrl.startsWith("http://")) {
+    backendUrl = backendUrl.replace("http://", "https://");
   }
 
   return `${backendUrl}${normalizedUrl}`;
