@@ -1,6 +1,33 @@
 import env from "@/config/env";
 
 /**
+ * Normalize a URL - remove duplicate domain prefixes
+ * @param url - URL that might have duplicate prefixes
+ * @returns Normalized URL
+ */
+function normalizeUrl(url: string): string {
+  // Check if URL has duplicate domain (e.g., "https://domain.com/https://domain.com/path")
+  const productionDomain = "https://news-backend.hmstech.org";
+  
+  // Check for duplicate production domain
+  if (url.includes(`${productionDomain}/${productionDomain}`)) {
+    // Remove the duplicate prefix
+    return url.replace(`${productionDomain}/`, "");
+  }
+  
+  // Check for any duplicate https:// pattern (more generic)
+  // Pattern: https://domain.com/https://domain.com/path
+  const duplicatePattern = /^(https?:\/\/[^/]+)\/(https?:\/\/[^/]+)(\/.*)$/;
+  const match = url.match(duplicatePattern);
+  if (match && match[1] === match[2]) {
+    // Both domains are the same, remove the duplicate
+    return `${match[1]}${match[3]}`;
+  }
+  
+  return url;
+}
+
+/**
  * Convert a relative URL to an absolute URL using the backend base URL
  * @param relativeUrl - Relative URL (e.g., "/uploads/image.jpg")
  * @returns Absolute URL (e.g., "https://news-backend.hmstech.org/uploads/image.jpg")
@@ -10,13 +37,16 @@ export function getAbsoluteUrl(relativeUrl: string | null | undefined): string |
     return null;
   }
 
-  // If already an absolute URL, return as is
-  if (relativeUrl.startsWith("http://") || relativeUrl.startsWith("https://")) {
-    return relativeUrl;
+  // Normalize URL first to remove any duplicate prefixes
+  const normalizedInput = normalizeUrl(relativeUrl);
+
+  // If already an absolute URL, return normalized version
+  if (normalizedInput.startsWith("http://") || normalizedInput.startsWith("https://")) {
+    return normalizedInput;
   }
 
   // Ensure relative URL starts with /
-  const normalizedUrl = relativeUrl.startsWith("/") ? relativeUrl : `/${relativeUrl}`;
+  const normalizedUrl = normalizedInput.startsWith("/") ? normalizedInput : `/${normalizedInput}`;
 
   // Get backend URL and remove trailing slash if present
   let backendUrl = env.BACKEND_URL.replace(/\/$/, "");

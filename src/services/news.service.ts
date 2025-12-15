@@ -16,9 +16,15 @@ export class NewsService {
     if (Array.isArray(news)) {
       return news.map((item: any) => this.convertNewsUrls(item));
     }
+    // Only convert if mainImage exists and is not already absolute
+    // getAbsoluteUrl() will normalize duplicate prefixes if needed
+    let mainImage = news.mainImage;
+    if (mainImage) {
+      mainImage = getAbsoluteUrl(mainImage);
+    }
     return {
       ...news,
-      mainImage: getAbsoluteUrl(news.mainImage),
+      mainImage,
     };
   }
 
@@ -274,8 +280,19 @@ export class NewsService {
     const { mainImageId: _mainImageId, ...newsData } = data;
 
     // Convert mainImage URL to absolute if provided
+    // Only convert if it's a relative URL, otherwise use as-is (already absolute)
     if (newsData.mainImage) {
-      newsData.mainImage = getAbsoluteUrl(newsData.mainImage);
+      // If already absolute, normalize it (remove any duplicate prefixes)
+      if (newsData.mainImage.startsWith("http://") || newsData.mainImage.startsWith("https://")) {
+        // Normalize to remove duplicate domain prefixes
+        const productionDomain = "https://news-backend.hmstech.org";
+        if (newsData.mainImage.startsWith(`${productionDomain}/${productionDomain}`)) {
+          newsData.mainImage = newsData.mainImage.replace(`${productionDomain}/`, "");
+        }
+      } else {
+        // Convert relative URL to absolute
+        newsData.mainImage = getAbsoluteUrl(newsData.mainImage);
+      }
     }
 
     const news = await prisma.news.create({
@@ -390,8 +407,19 @@ export class NewsService {
       updateData.summary = sanitizeHtmlContent(data.summary);
     }
     // Convert mainImage URL to absolute if provided
+    // Only convert if it's a relative URL, otherwise use as-is (already absolute)
     if (updateData.mainImage) {
-      updateData.mainImage = getAbsoluteUrl(updateData.mainImage);
+      // If already absolute, normalize it (remove any duplicate prefixes)
+      if (updateData.mainImage.startsWith("http://") || updateData.mainImage.startsWith("https://")) {
+        // Normalize to remove duplicate domain prefixes
+        const productionDomain = "https://news-backend.hmstech.org";
+        if (updateData.mainImage.startsWith(`${productionDomain}/${productionDomain}`)) {
+          updateData.mainImage = updateData.mainImage.replace(`${productionDomain}/`, "");
+        }
+      } else {
+        // Convert relative URL to absolute
+        updateData.mainImage = getAbsoluteUrl(updateData.mainImage);
+      }
     }
 
     const updatedNews = await prisma.news.update({
