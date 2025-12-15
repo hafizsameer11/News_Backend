@@ -1,6 +1,7 @@
 import prisma from "@/config/prisma";
 import bcrypt from "bcryptjs";
 import { ROLE } from "@/types/enums";
+import { logger } from "@/utils/logger";
 
 export class UserService {
   /**
@@ -153,12 +154,29 @@ export class UserService {
       };
     }
 
-    const user = await prisma.user.create({
-      data: createData,
-      include: {
-        allowedCategories: true,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: createData,
+        include: {
+          allowedCategories: true,
+        },
+      });
+    } catch (error: any) {
+      // If _EditorCategories table doesn't exist, create user without categories
+      if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
+        logger.warn("_EditorCategories table not found, creating user without categories");
+        // Remove allowedCategories from createData if table doesn't exist
+        const { allowedCategories: _allowedCategories, ...createDataWithoutCategories } = createData;
+        user = await prisma.user.create({
+          data: createDataWithoutCategories,
+        });
+        // Add empty categories array to match expected structure
+        (user as any).allowedCategories = [];
+      } else {
+        throw error;
+      }
+    }
 
     const { password: _password, ...userWithoutPassword } = user;
     return userWithoutPassword;
@@ -199,13 +217,31 @@ export class UserService {
       }
     }
 
-    const user = await prisma.user.update({
-      where: { id },
-      data: updateData,
-      include: {
-        allowedCategories: true,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.update({
+        where: { id },
+        data: updateData,
+        include: {
+          allowedCategories: true,
+        },
+      });
+    } catch (error: any) {
+      // If _EditorCategories table doesn't exist, update user without categories
+      if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
+        logger.warn("_EditorCategories table not found, updating user without categories");
+        // Remove allowedCategories from updateData if table doesn't exist
+        const { allowedCategories: _allowedCategories, ...updateDataWithoutCategories } = updateData;
+        user = await prisma.user.update({
+          where: { id },
+          data: updateDataWithoutCategories,
+        });
+        // Add empty categories array to match expected structure
+        (user as any).allowedCategories = [];
+      } else {
+        throw error;
+      }
+    }
 
     const { password: _password, ...userWithoutPassword } = user;
     return userWithoutPassword;

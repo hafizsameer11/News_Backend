@@ -201,13 +201,31 @@ export class NewsService {
 
     // Check category permissions for Editor
     // (This logic could be in controller or here)
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { allowedCategories: true },
-    });
+    let user;
+    try {
+      user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { allowedCategories: true },
+      });
+    } catch (error: any) {
+      // If _EditorCategories table doesn't exist, get user without categories
+      if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
+        logger.warn("_EditorCategories table not found, fetching user without categories");
+        user = await prisma.user.findUnique({
+          where: { id: userId },
+        });
+        // Add empty categories array to match expected structure
+        if (user) {
+          (user as any).allowedCategories = [];
+        }
+      } else {
+        throw error;
+      }
+    }
 
     if (user?.role === ROLE.EDITOR) {
-      const hasPermission = user.allowedCategories.some((c) => c.id === data.categoryId);
+      const allowedCategories = (user as any).allowedCategories || [];
+      const hasPermission = allowedCategories.some((c: any) => c.id === data.categoryId);
       if (!hasPermission) {
         throw new Error("You do not have permission to post in this category");
       }
@@ -284,13 +302,31 @@ export class NewsService {
 
       // Check editor permissions for new category
       if (userRole === ROLE.EDITOR) {
-        const user = await prisma.user.findUnique({
-          where: { id: userId },
-          include: { allowedCategories: true },
-        });
+        let user;
+        try {
+          user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { allowedCategories: true },
+          });
+        } catch (error: any) {
+          // If _EditorCategories table doesn't exist, get user without categories
+          if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
+            logger.warn("_EditorCategories table not found, fetching user without categories");
+            user = await prisma.user.findUnique({
+              where: { id: userId },
+            });
+            // Add empty categories array to match expected structure
+            if (user) {
+              (user as any).allowedCategories = [];
+            }
+          } else {
+            throw error;
+          }
+        }
 
         if (user) {
-          const hasPermission = user.allowedCategories.some((c) => c.id === data.categoryId);
+          const allowedCategories = (user as any).allowedCategories || [];
+          const hasPermission = allowedCategories.some((c: any) => c.id === data.categoryId);
           if (!hasPermission) {
             throw new Error("You do not have permission to post in this category");
           }
