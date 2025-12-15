@@ -151,12 +151,14 @@ export const createApp = (): Express => {
   app.use("/api/v1/", limiter);
 
   // Webhook routes must be before JSON parser (handles raw body)
-  app.use("/api/v1/payment/webhook", express.raw({ type: "application/json" }));
-  app.use("/api/v1/social/webhook", express.raw({ type: "application/json" }));
+  // Increase limit for webhooks as well (Stripe webhooks can be large)
+  app.use("/api/v1/payment/webhook", express.raw({ type: "application/json", limit: "10mb" }));
+  app.use("/api/v1/social/webhook", express.raw({ type: "application/json", limit: "10mb" }));
 
-  // Body parsing middleware
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // Body parsing middleware with increased size limits for large content
+  // Default is 100kb, increasing to 50MB to handle large news articles with rich content
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   // Request logging (skip verbose analytics tracking logs)
   app.use((req, _res, next) => {
