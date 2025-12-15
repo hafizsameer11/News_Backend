@@ -76,10 +76,9 @@ export const createApp = (): Express => {
   // CRITICAL: Middleware to set permissive headers and ensure CORS on ALL responses
   // This MUST run on every request to override any restrictive headers
   app.use((req, res, next) => {
-    // Intercept response.end() to ensure headers are set right before sending
-    const originalEnd = res.end.bind(res);
-    res.end = function (chunk?: any, encoding?: any, cb?: any) {
-      // Force set permissive Referrer-Policy (most permissive option)
+    // Set headers immediately (before compression or any other middleware)
+    if (!res.headersSent) {
+      // Set most permissive Referrer-Policy
       res.setHeader("Referrer-Policy", "unsafe-url");
       
       // Remove any restrictive CORS-related headers
@@ -108,20 +107,6 @@ export const createApp = (): Express => {
       
       // Set Cross-Origin-Resource-Policy to permissive
       res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-      
-      return originalEnd.call(this, chunk, encoding, cb);
-    };
-    
-    // Also set headers immediately
-    res.setHeader("Referrer-Policy", "unsafe-url");
-    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-    
-    const origin = req.headers.origin;
-    if (origin) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Access-Control-Allow-Credentials", "true");
-    } else {
-      res.setHeader("Access-Control-Allow-Origin", "*");
     }
     
     next();
