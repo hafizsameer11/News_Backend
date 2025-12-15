@@ -63,6 +63,9 @@ COPY tsconfig.json ./
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 
+# Copy start script
+COPY start.js ./
+
 # Create uploads directory structure
 RUN mkdir -p uploads/chunks uploads/thumbnails uploads/videos
 
@@ -81,6 +84,6 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD node -r tsconfig-paths/register -e "require('http').get('http://localhost:' + (process.env.PORT || '3001') + '/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
-# Start the application with path alias resolution
-CMD ["node", "-r", "tsconfig-paths/register", "dist/server.js"]
+# Start the application using the wrapper script
+CMD ["node", "start.js"]
 
