@@ -46,8 +46,9 @@ RUN apk add --no-cache \
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
+# Install production dependencies and Prisma CLI (needed for migrations)
 RUN npm ci --only=production && \
+    npm install prisma && \
     npm cache clean --force
 
 # Copy Prisma files
@@ -59,13 +60,18 @@ RUN npx prisma generate
 # Copy built application from builder stage (with resolved paths via tsc-alias)
 COPY --from=builder /app/dist ./dist
 
+# Copy startup script and make it executable
+COPY start.sh ./
+RUN chmod +x start.sh
+
 # Create uploads directory structure
 RUN mkdir -p uploads/chunks uploads/thumbnails uploads/videos
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
-    chown -R nodejs:nodejs /app
+    chown -R nodejs:nodejs /app && \
+    chmod +x /app/start.sh
 
 # Switch to non-root user
 USER nodejs
@@ -77,6 +83,6 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || '3001') + '/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
-# Start the application directly (paths already resolved by tsc-alias)
-CMD ["node", "dist/server.js"]
+# Start the application using the startup script (runs migrations first)
+CMD ["/app/start.sh"]
 

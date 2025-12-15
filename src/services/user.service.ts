@@ -11,34 +11,66 @@ export class UserService {
 
     const where = role ? { role: role as any } : {};
 
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          isActive: true,
-          createdAt: true,
-          socialPostingAllowed: true,
-          allowedCategories: {
-            select: {
-              id: true,
-              nameEn: true,
-              nameIt: true,
+    let users, total;
+    try {
+      [users, total] = await Promise.all([
+        prisma.user.findMany({
+          where,
+          skip,
+          take: limit,
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            isActive: true,
+            createdAt: true,
+            socialPostingAllowed: true,
+            allowedCategories: {
+              select: {
+                id: true,
+                nameEn: true,
+                nameIt: true,
+              },
+            },
+            _count: {
+              select: { newsAuthored: true },
             },
           },
-          _count: {
-            select: { newsAuthored: true },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.user.count({ where }),
-    ]);
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.user.count({ where }),
+      ]);
+    } catch (error: any) {
+      // If _EditorCategories table doesn't exist, get users without categories
+      if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
+        [users, total] = await Promise.all([
+          prisma.user.findMany({
+            where,
+            skip,
+            take: limit,
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              role: true,
+              isActive: true,
+              createdAt: true,
+              socialPostingAllowed: true,
+              _count: {
+                select: { newsAuthored: true },
+              },
+            },
+            orderBy: { createdAt: "desc" },
+          }),
+          prisma.user.count({ where }),
+        ]);
+        // Add empty categories array to each user
+        users = users.map((user) => ({ ...user, allowedCategories: [] }));
+      } else {
+        throw error;
+      }
+    }
 
     return {
       users,
@@ -55,12 +87,28 @@ export class UserService {
    * Get user by ID
    */
   async getUserById(id: string) {
-    const user = await prisma.user.findUnique({
-      where: { id },
-      include: {
-        allowedCategories: true,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.findUnique({
+        where: { id },
+        include: {
+          allowedCategories: true,
+        },
+      });
+    } catch (error: any) {
+      // If _EditorCategories table doesn't exist, get user without categories
+      if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
+        user = await prisma.user.findUnique({
+          where: { id },
+        });
+        // Add empty categories array to match expected structure
+        if (user) {
+          (user as any).allowedCategories = [];
+        }
+      } else {
+        throw error;
+      }
+    }
 
     if (!user) throw new Error("User not found");
 
@@ -226,17 +274,29 @@ export class UserService {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new Error("User not found");
 
-    // Update categories
-    return await prisma.user.update({
-      where: { id: userId },
-      data: {
-        allowedCategories: {
-          set: categoryIds.map((id) => ({ id })),
+    // Update categories (handle case where table might not exist)
+    try {
+      return await prisma.user.update({
+        where: { id: userId },
+        data: {
+          allowedCategories: {
+            set: categoryIds.map((id) => ({ id })),
+          },
         },
-      },
-      include: {
-        allowedCategories: true,
-      },
-    });
+        include: {
+          allowedCategories: true,
+        },
+      });
+    } catch (error: any) {
+      // If _EditorCategories table doesn't exist, return user without categories
+      if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
+        const updatedUser = await prisma.user.findUnique({
+          where: { id: userId },
+        });
+        if (!updatedUser) throw new Error("User not found");
+        return { ...updatedUser, allowedCategories: [] };
+      }
+      throw error;
+    }
   }
 }

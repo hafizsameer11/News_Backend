@@ -146,20 +146,37 @@ export class AuthService {
       role: user.role as unknown as ROLE,
     });
 
-    // Get user with allowed categories
-    const userWithCategories = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        allowedCategories: {
-          select: {
-            id: true,
-            nameEn: true,
-            nameIt: true,
-            slug: true,
+    // Get user with allowed categories (handle case where table might not exist)
+    let userWithCategories;
+    try {
+      userWithCategories = await prisma.user.findUnique({
+        where: { id: user.id },
+        include: {
+          allowedCategories: {
+            select: {
+              id: true,
+              nameEn: true,
+              nameIt: true,
+              slug: true,
+            },
           },
         },
-      },
-    });
+      });
+    } catch (error: any) {
+      // If _EditorCategories table doesn't exist, get user without categories
+      if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
+        logger.warn("_EditorCategories table not found, fetching user without categories");
+        userWithCategories = await prisma.user.findUnique({
+          where: { id: user.id },
+        });
+        // Add empty categories array to match expected structure
+        if (userWithCategories) {
+          (userWithCategories as any).allowedCategories = [];
+        }
+      } else {
+        throw error;
+      }
+    }
 
     if (!userWithCategories) {
       throw new Error("User not found");
@@ -175,29 +192,58 @@ export class AuthService {
    * Get current user profile
    */
   async getProfile(userId: string) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        avatar: true,
-        isActive: true,
-        companyName: true,
-        allowedCategories: {
+    let user;
+    try {
+      user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          avatar: true,
+          isActive: true,
+          companyName: true,
+          allowedCategories: {
+            select: {
+              id: true,
+              nameEn: true,
+              nameIt: true,
+              slug: true,
+            },
+          },
+          socialPostingAllowed: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    } catch (error: any) {
+      // If _EditorCategories table doesn't exist, get user without categories
+      if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
+        logger.warn("_EditorCategories table not found, fetching user without categories");
+        user = await prisma.user.findUnique({
+          where: { id: userId },
           select: {
             id: true,
-            nameEn: true,
-            nameIt: true,
-            slug: true,
+            email: true,
+            name: true,
+            role: true,
+            avatar: true,
+            isActive: true,
+            companyName: true,
+            socialPostingAllowed: true,
+            createdAt: true,
+            updatedAt: true,
           },
-        },
-        socialPostingAllowed: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+        });
+        // Add empty categories array to match expected structure
+        if (user) {
+          (user as any).allowedCategories = [];
+        }
+      } else {
+        throw error;
+      }
+    }
 
     if (!user) {
       throw new Error("User not found");
