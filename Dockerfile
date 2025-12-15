@@ -6,8 +6,8 @@ FROM node:20-alpine AS builder
 # Set working directory
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache libc6-compat
+# Install build dependencies including OpenSSL for Prisma
+RUN apk add --no-cache libc6-compat openssl1.1-compat
 
 # Copy package files
 COPY package*.json ./
@@ -46,9 +46,8 @@ RUN apk add --no-cache \
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies and tsconfig-paths (needed for runtime path resolution)
+# Install production dependencies only
 RUN npm ci --only=production && \
-    npm install tsconfig-paths && \
     npm cache clean --force
 
 # Copy Prisma files
@@ -57,15 +56,8 @@ COPY prisma ./prisma
 # Generate Prisma Client for production
 RUN npx prisma generate
 
-# Copy tsconfig.json for path resolution
-COPY tsconfig.json ./
-
-# Copy built application from builder stage
+# Copy built application from builder stage (with resolved paths via tsc-alias)
 COPY --from=builder /app/dist ./dist
-
-# Copy start script and path registration file
-COPY start.js ./
-COPY register-paths.js ./
 
 # Create uploads directory structure
 RUN mkdir -p uploads/chunks uploads/thumbnails uploads/videos
@@ -83,8 +75,8 @@ EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -r tsconfig-paths/register -e "require('http').get('http://localhost:' + (process.env.PORT || '3001') + '/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
+  CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || '3001') + '/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
-# Start the application with path alias registration loaded first
-CMD ["node", "-r", "./register-paths.js", "start.js"]
+# Start the application directly (paths already resolved by tsc-alias)
+CMD ["node", "dist/server.js"]
 

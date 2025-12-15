@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias",
     "build:check": "tsc --noEmit",
     "prebuild": "npm run lint -- --max-warnings=300 || true",
     "start": "node dist/server.js",
@@ -75,6 +75,7 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-node": "^11.1.0",
     "prettier": "^3.2.5",
+    "tsc-alias": "^1.8.10",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3"
