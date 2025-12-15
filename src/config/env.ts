@@ -73,6 +73,7 @@ const envSchema = z.object({
   CACHE_TTL_SECONDS: z.string().transform(Number).default("3600"), // 1 hour default
   // SEO Configuration
   FRONTEND_URL: z.string().default("http://localhost:3000"),
+  BACKEND_URL: z.string().default("http://localhost:3001"),
   SITE_NAME: z.string().default("NEWS NEXT"),
   SITE_DESCRIPTION: z.string().default("Calabria's premier news portal"),
   SITE_IMAGE: z.string().default(""),

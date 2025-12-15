@@ -6,6 +6,7 @@ import prisma from "@/config/prisma";
 import { MediaService } from "./media.service";
 import { VideoProcessingService } from "./video-processing.service";
 import { logger } from "@/utils/logger";
+import { getAbsoluteUrl } from "@/utils/url";
 
 const mediaService = new MediaService();
 const videoProcessingService = new VideoProcessingService();
@@ -182,15 +183,8 @@ export class VideoUploadService {
 
     const media = await mediaService.saveMedia(mockFile, caption, newsId);
 
-    // Update URL if needed to match actual file location
-    const url = `/${videoUploadDir}/${uniqueFilename}`.replace(/\\/g, "/");
-    if (media.url !== url) {
-      await prisma.media.update({
-        where: { id: media.id },
-        data: { url },
-      });
-      media.url = url;
-    }
+    // Media service now saves absolute URLs, so no need to update
+    // The URL is already absolute in the database
 
     // Clean up session
     uploadSessions.delete(uploadId);
@@ -202,7 +196,7 @@ export class VideoUploadService {
 
     return {
       mediaId: media.id,
-      url,
+      url: media.url, // Already absolute from saveMedia
     };
   }
 

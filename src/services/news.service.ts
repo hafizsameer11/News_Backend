@@ -5,8 +5,23 @@ import { breakingNewsService } from "./breaking-news.service";
 import { logger } from "@/utils/logger";
 import { ga4Client } from "@/lib/ga4-client";
 import { sanitizeHtmlContent } from "@/utils/sanitize";
+import { getAbsoluteUrl } from "@/utils/url";
 
 export class NewsService {
+  /**
+   * Helper function to convert relative URLs to absolute URLs in news objects
+   */
+  private convertNewsUrls(news: any) {
+    if (!news) return news;
+    if (Array.isArray(news)) {
+      return news.map((item) => this.convertNewsUrls(item));
+    }
+    return {
+      ...news,
+      mainImage: getAbsoluteUrl(news.mainImage),
+    };
+  }
+
   /**
    * Get all news (Public/Filtered)
    */
@@ -78,7 +93,7 @@ export class NewsService {
     ]);
 
     return {
-      news,
+      news: this.convertNewsUrls(news),
       meta: {
         total,
         page: Number(page),
@@ -184,7 +199,7 @@ export class NewsService {
       }
     });
 
-    return news;
+    return this.convertNewsUrls(news);
   }
 
   /**
@@ -193,7 +208,11 @@ export class NewsService {
   async createNews(data: any, userId: string) {
     // Check slug uniqueness
     const existing = await prisma.news.findUnique({ where: { slug: data.slug } });
-    if (existing) throw new Error("Slug already exists");
+    if (existing) {
+      const error: any = new Error("A news article with this slug already exists. Please use a different slug.");
+      error.statusCode = 409;
+      throw error;
+    }
 
     // Verify category exists
     const category = await prisma.category.findUnique({ where: { id: data.categoryId } });
@@ -254,6 +273,11 @@ export class NewsService {
     // Remove mainImageId if present (not in schema, only mainImage URL is stored)
     const { mainImageId: _mainImageId, ...newsData } = data;
 
+    // Convert mainImage URL to absolute if provided
+    if (newsData.mainImage) {
+      newsData.mainImage = getAbsoluteUrl(newsData.mainImage);
+    }
+
     const news = await prisma.news.create({
       data: {
         ...newsData,
@@ -280,7 +304,7 @@ export class NewsService {
       }
     }
 
-    return news;
+    return this.convertNewsUrls(news);
   }
 
   /**
@@ -337,7 +361,11 @@ export class NewsService {
     // Check slug if changing
     if (data.slug) {
       const existing = await prisma.news.findUnique({ where: { slug: data.slug } });
-      if (existing && existing.id !== id) throw new Error("Slug already exists");
+      if (existing && existing.id !== id) {
+        const error: any = new Error("A news article with this slug already exists. Please use a different slug.");
+        error.statusCode = 409;
+        throw error;
+      }
     }
 
     // Validate mainImage URL if provided
@@ -360,6 +388,10 @@ export class NewsService {
     }
     if (data.summary) {
       updateData.summary = sanitizeHtmlContent(data.summary);
+    }
+    // Convert mainImage URL to absolute if provided
+    if (updateData.mainImage) {
+      updateData.mainImage = getAbsoluteUrl(updateData.mainImage);
     }
 
     const updatedNews = await prisma.news.update({
@@ -393,7 +425,7 @@ export class NewsService {
       }
     }
 
-    return updatedNews;
+    return this.convertNewsUrls(updatedNews);
   }
 
   /**

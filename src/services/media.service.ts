@@ -5,6 +5,7 @@ import fs from "fs";
 import { extractImageMetadata } from "@/lib/image-metadata";
 import { VideoProcessingService } from "./video-processing.service";
 import { logger } from "@/utils/logger";
+import { getAbsoluteUrl } from "@/utils/url";
 
 const videoProcessingService = new VideoProcessingService();
 
@@ -21,13 +22,16 @@ export class MediaService {
   ) {
     const type = file.mimetype.startsWith("video") ? MediaType.VIDEO : MediaType.IMAGE;
 
-    // Determine URL based on file type
-    const url =
+    // Determine relative path based on file type (for file system operations)
+    const relativePath =
       type === MediaType.VIDEO ? `/uploads/videos/${file.filename}` : `/uploads/${file.filename}`;
 
-    // Base data object
+    // Convert to absolute URL for database storage
+    const absoluteUrl = getAbsoluteUrl(relativePath);
+
+    // Base data object - save absolute URL to database
     const data: any = {
-      url,
+      url: absoluteUrl,
       type,
       caption,
       newsId,
@@ -47,7 +51,8 @@ export class MediaService {
       // Set status: COMPLETED for admins/super-admins, PENDING for others (editors, advertisers, users)
       data.processingStatus = canAutoApprove ? "COMPLETED" : "PENDING";
       try {
-        const filePath = path.join(process.cwd(), url.startsWith("/") ? url.slice(1) : url);
+        // Use relative path for file system operations
+        const filePath = path.join(process.cwd(), relativePath.startsWith("/") ? relativePath.slice(1) : relativePath);
         const metadata = await extractImageMetadata(filePath);
 
         data.width = metadata.width > 0 ? metadata.width : null;
@@ -74,6 +79,7 @@ export class MediaService {
       });
     }
 
+    // Return media (URL is already absolute in database)
     return media;
   }
 
@@ -123,8 +129,14 @@ export class MediaService {
       prisma.media.count({ where }),
     ]);
 
+    // Convert URLs to absolute (handle both relative and absolute URLs for backward compatibility)
+    const mediaWithAbsoluteUrls = media.map((item) => ({
+      ...item,
+      url: getAbsoluteUrl(item.url), // Handles both relative and absolute URLs
+    }));
+
     return {
-      media,
+      media: mediaWithAbsoluteUrls,
       meta: {
         total,
         page,
@@ -138,28 +150,47 @@ export class MediaService {
    * Get media by ID
    */
   async getMediaById(id: string) {
-    return await prisma.media.findUnique({ where: { id } });
+    const media = await prisma.media.findUnique({ where: { id } });
+    if (!media) return null;
+    // Ensure URL is absolute (handles both relative and absolute URLs for backward compatibility)
+    return {
+      ...media,
+      url: getAbsoluteUrl(media.url),
+    };
   }
 
   /**
    * Get media by URL (handles both relative and full URLs)
+   * Database now stores absolute URLs, but we need to handle both for backward compatibility
    */
   async getMediaByUrl(url: string) {
     // Extract relative path from full URL if needed
     let relativeUrl = url;
+    let absoluteUrl = url;
+    
     if (url.startsWith("http://") || url.startsWith("https://")) {
+      // Already absolute URL
+      absoluteUrl = url;
       try {
         const urlObj = new URL(url);
         relativeUrl = urlObj.pathname;
       } catch {
-        // If URL parsing fails, use original URL
         relativeUrl = url;
       }
+    } else {
+      // Relative URL provided, convert to absolute
+      relativeUrl = url;
+      absoluteUrl = getAbsoluteUrl(url);
     }
 
+    // Search for both relative and absolute URLs (for backward compatibility)
     return await prisma.media.findFirst({
       where: {
-        OR: [{ url: relativeUrl }, { url: url }],
+        OR: [
+          { url: relativeUrl },
+          { url: absoluteUrl },
+          { url: url }, // Original URL as fallback
+        ],
       },
       include: {
         uploader: {
