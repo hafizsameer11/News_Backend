@@ -18,21 +18,7 @@ import { swaggerSpec } from "@/config/swagger";
 export const createApp = (): Express => {
   const app = express();
 
-  // Security middleware (Helmet) - configured to allow cross-origin requests
-  app.use(
-    helmet({
-      contentSecurityPolicy: false, // Disable CSP to avoid conflicts with CORS
-      crossOriginEmbedderPolicy: false, // Allow embedding for Swagger UI
-      crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
-      crossOriginOpenerPolicy: false, // Allow cross-origin opener
-      // Disable strict transport security for development (can enable in production if needed)
-      strictTransportSecurity: false,
-    })
-  );
-
-  // Compression middleware
-  app.use(compression());
-
+  // CORS MUST be first - before any other middleware
   // CORS configuration - allow all origins
   // When credentials: true, we must reflect the specific origin, not use "*"
   app.use(
@@ -64,25 +50,7 @@ export const createApp = (): Express => {
     })
   );
 
-  // Handle preflight requests explicitly for all routes
-  app.options("*", (req, res) => {
-    const origin = req.headers.origin;
-    if (origin) {
-      res.header("Access-Control-Allow-Origin", origin);
-    } else {
-      res.header("Access-Control-Allow-Origin", "*");
-    }
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
-    );
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.header("Access-Control-Max-Age", "86400");
-    res.sendStatus(204);
-  });
-
-  // Global CORS headers middleware - ensure all responses have CORS headers
+  // Global CORS headers middleware - ensure all responses have CORS headers (before Helmet)
   app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (origin) {
@@ -99,6 +67,40 @@ export const createApp = (): Express => {
     );
     res.header("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
     next();
+  });
+
+  // Security middleware (Helmet) - configured to allow cross-origin requests
+  // Must be after CORS to avoid overriding CORS headers
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // Disable CSP to avoid conflicts with CORS
+      crossOriginEmbedderPolicy: false, // Allow embedding for Swagger UI
+      crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow cross-origin resources
+      crossOriginOpenerPolicy: false, // Allow cross-origin opener
+      referrerPolicy: false, // Disable Referrer-Policy to avoid strict-origin-when-cross-origin
+      strictTransportSecurity: false, // Disable HSTS for development (can enable in production if needed)
+    })
+  );
+
+  // Compression middleware
+  app.use(compression());
+
+  // Handle preflight requests explicitly for all routes (must be after CORS setup)
+  app.options("*", (req, res) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.header("Access-Control-Allow-Origin", "*");
+    }
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
+    );
+    res.header("Access-Control-Max-Age", "86400");
+    res.sendStatus(204);
   });
 
   // Documentation
@@ -176,7 +178,15 @@ export const createApp = (): Express => {
   app.use("/api/v1", routes);
 
   // Root endpoint
-  app.get("/", (_req, res) => {
+  app.get("/", (req, res) => {
+    // Ensure CORS headers are set
+    const origin = req.headers.origin;
+    if (origin) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.header("Access-Control-Allow-Origin", "*");
+    }
     res.json({
       message: "NEWS NEXT Backend API",
       version: "1.0.0",
@@ -185,7 +195,15 @@ export const createApp = (): Express => {
   });
 
   // 404 handler
-  app.use((_req, res) => {
+  app.use((req, res) => {
+    // Ensure CORS headers are set even for 404 responses
+    const origin = req.headers.origin;
+    if (origin) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.header("Access-Control-Allow-Origin", "*");
+    }
     res.status(404).json({
       success: false,
       message: "Route not found",
