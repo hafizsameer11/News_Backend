@@ -5,17 +5,8 @@ import env from "@/config/env";
  * @param url - URL that might have duplicate prefixes
  * @returns Normalized URL
  */
-function normalizeUrl(url: string): string {
-  // Check if URL has duplicate domain (e.g., "https://domain.com/https://domain.com/path")
-  const productionDomain = "https://news-backend.hmstech.org";
-  
-  // Check for duplicate production domain
-  if (url.includes(`${productionDomain}/${productionDomain}`)) {
-    // Remove the duplicate prefix
-    return url.replace(`${productionDomain}/`, "");
-  }
-  
-  // Check for any duplicate https:// pattern (more generic)
+export function normalizeUrl(url: string): string {
+  // Check for any duplicate https:// pattern (generic)
   // Pattern: https://domain.com/https://domain.com/path
   const duplicatePattern = /^(https?:\/\/[^/]+)\/(https?:\/\/[^/]+)(\/.*)$/;
   const match = url.match(duplicatePattern);
@@ -30,7 +21,7 @@ function normalizeUrl(url: string): string {
 /**
  * Convert a relative URL to an absolute URL using the backend base URL
  * @param relativeUrl - Relative URL (e.g., "/uploads/image.jpg")
- * @returns Absolute URL (e.g., "https://news-backend.hmstech.org/uploads/image.jpg")
+ * @returns Absolute URL using BACKEND_URL from environment
  */
 export function getAbsoluteUrl(relativeUrl: string | null | undefined): string | null {
   if (!relativeUrl) {
@@ -42,8 +33,8 @@ export function getAbsoluteUrl(relativeUrl: string | null | undefined): string |
 
   // If already an absolute URL, normalize protocol and return
   if (normalizedInput.startsWith("http://") || normalizedInput.startsWith("https://")) {
-    // Ensure production domain uses HTTPS
-    if (normalizedInput.includes("news-backend.hmstech.org") && normalizedInput.startsWith("http://")) {
+    // Ensure HTTPS in production environment
+    if (process.env.NODE_ENV === "production" && normalizedInput.startsWith("http://")) {
       normalizedInput = normalizedInput.replace("http://", "https://");
     }
     return normalizedInput;
@@ -55,23 +46,14 @@ export function getAbsoluteUrl(relativeUrl: string | null | undefined): string |
   // Get backend URL and remove trailing slash if present
   let backendUrl = env.BACKEND_URL.replace(/\/$/, "");
   
-  // ALWAYS use production URL in production environment, or if BACKEND_URL is localhost
-  // This ensures all URLs are stored with the production domain
-  // Also ensure we use HTTPS in production
-  if (
-    process.env.NODE_ENV === "production" ||
-    !backendUrl ||
-    backendUrl.includes("localhost") ||
-    backendUrl.includes("127.0.0.1") ||
-    backendUrl.startsWith("http://localhost") ||
-    backendUrl.startsWith("http://127.0.0.1") ||
-    (backendUrl.includes("news-backend.hmstech.org") && backendUrl.startsWith("http://"))
-  ) {
-    backendUrl = "https://news-backend.hmstech.org";
+  // Ensure we have a valid backend URL
+  if (!backendUrl) {
+    // Fallback to localhost if BACKEND_URL is not set
+    backendUrl = "http://localhost:3001";
   }
   
-  // Normalize http:// to https:// for production domain
-  if (backendUrl.includes("news-backend.hmstech.org") && backendUrl.startsWith("http://")) {
+  // Ensure HTTPS in production environment
+  if (process.env.NODE_ENV === "production" && backendUrl.startsWith("http://")) {
     backendUrl = backendUrl.replace("http://", "https://");
   }
 

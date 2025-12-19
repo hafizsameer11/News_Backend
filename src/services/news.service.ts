@@ -5,7 +5,7 @@ import { breakingNewsService } from "./breaking-news.service";
 import { logger } from "@/utils/logger";
 import { ga4Client } from "@/lib/ga4-client";
 import { sanitizeHtmlContent } from "@/utils/sanitize";
-import { getAbsoluteUrl } from "@/utils/url";
+import { getAbsoluteUrl, normalizeUrl } from "@/utils/url";
 
 export class NewsService {
   /**
@@ -285,10 +285,7 @@ export class NewsService {
       // If already absolute, normalize it (remove any duplicate prefixes)
       if (newsData.mainImage.startsWith("http://") || newsData.mainImage.startsWith("https://")) {
         // Normalize to remove duplicate domain prefixes
-        const productionDomain = "https://news-backend.hmstech.org";
-        if (newsData.mainImage.startsWith(`${productionDomain}/${productionDomain}`)) {
-          newsData.mainImage = newsData.mainImage.replace(`${productionDomain}/`, "");
-        }
+        newsData.mainImage = normalizeUrl(newsData.mainImage);
       } else {
         // Convert relative URL to absolute
         newsData.mainImage = getAbsoluteUrl(newsData.mainImage);
@@ -412,10 +409,7 @@ export class NewsService {
       // If already absolute, normalize it (remove any duplicate prefixes)
       if (updateData.mainImage.startsWith("http://") || updateData.mainImage.startsWith("https://")) {
         // Normalize to remove duplicate domain prefixes
-        const productionDomain = "https://news-backend.hmstech.org";
-        if (updateData.mainImage.startsWith(`${productionDomain}/${productionDomain}`)) {
-          updateData.mainImage = updateData.mainImage.replace(`${productionDomain}/`, "");
-        }
+        updateData.mainImage = normalizeUrl(updateData.mainImage);
       } else {
         // Convert relative URL to absolute
         updateData.mainImage = getAbsoluteUrl(updateData.mainImage);

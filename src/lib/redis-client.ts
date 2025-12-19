@@ -10,8 +10,6 @@ export class RedisClient {
   constructor() {
     if (env.REDIS_ENABLED) {
       this.initialize();
-    } else {
-      logger.info("Redis caching is disabled (REDIS_ENABLED=false)");
     }
   }
 
