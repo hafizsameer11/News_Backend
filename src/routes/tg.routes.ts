@@ -63,26 +63,24 @@ router.get("/videos", asyncHandler(tgController.getAllVideos));
 
 /**
  * @openapi
- * /tg/videos/{id}:
+ * /tg/videos/popular:
  *   get:
  *     tags:
  *       - TG Videos
- *     summary: Get single TG video
- *     description: Retrieve a single TG video with full details including news article, category, and author.
+ *     summary: Get popular TG videos
+ *     description: Get popular TG videos (currently returns latest videos).
  *     parameters:
- *       - in: path
- *         name: id
- *         required: true
+ *       - in: query
+ *         name: limit
  *         schema:
- *           type: string
- *           format: uuid
+ *           type: integer
+ *           default: 10
+ *         description: Number of videos to return
  *     responses:
  *       200:
- *         description: Video retrieved successfully
- *       404:
- *         description: Video not found
+ *         description: Popular videos retrieved successfully
  */
-router.get("/videos/:id", asyncHandler(tgController.getVideoById));
+router.get("/videos/popular", asyncHandler(tgController.getPopularVideos));
 
 /**
  * @openapi
@@ -115,24 +113,26 @@ router.get("/videos/related/:id", asyncHandler(tgController.getRelatedVideos));
 
 /**
  * @openapi
- * /tg/videos/popular:
+ * /tg/videos/{id}:
  *   get:
  *     tags:
  *       - TG Videos
- *     summary: Get popular TG videos
- *     description: Get popular TG videos (currently returns latest videos).
+ *     summary: Get single TG video
+ *     description: Retrieve a single TG video with full details including news article, category, and author.
  *     parameters:
- *       - in: query
- *         name: limit
+ *       - in: path
+ *         name: id
+ *         required: true
  *         schema:
- *           type: integer
- *           default: 10
- *         description: Number of videos to return
+ *           type: string
+ *           format: uuid
  *     responses:
  *       200:
- *         description: Popular videos retrieved successfully
+ *         description: Video retrieved successfully
+ *       404:
+ *         description: Video not found
  */
-router.get("/videos/popular", asyncHandler(tgController.getPopularVideos));
+router.get("/videos/:id", asyncHandler(tgController.getVideoById));
 
 // Note: Creating/Updating TG news is done via standard News API
 // by setting `isTG: true`

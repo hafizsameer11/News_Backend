@@ -261,7 +261,7 @@ export class TGService {
   async getPopularVideos(limit = 10) {
     // For now, return latest videos as popular
     // In future, can add view tracking to News model
-    return await prisma.media.findMany({
+    const videos = await prisma.media.findMany({
       where: {
         type: "VIDEO",
         news: {
@@ -297,5 +297,9 @@ export class TGService {
         },
       },
     });
+
+    // Return empty array if no videos found (don't throw error)
+    // This allows the API to return 200 with empty array instead of error
+    return videos || [];
   }
 }

@@ -51,6 +51,28 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
     return errorResponse(res, "Invalid or expired token", null, 401);
   }
 
+  // Check for authentication/authorization errors and return 401 instead of 500
+  const lowerMessage = err.message?.toLowerCase() || "";
+  if (
+    lowerMessage.includes("invalid credentials") ||
+    lowerMessage.includes("invalid password") ||
+    lowerMessage.includes("authentication failed") ||
+    lowerMessage.includes("unauthorized") ||
+    lowerMessage.includes("not authenticated") ||
+    lowerMessage.includes("account is disabled")
+  ) {
+    return errorResponse(res, err.message || "Authentication failed", null, 401);
+  }
+
+  // Check for "not found" errors and return 404 instead of 500
+  if (
+    lowerMessage.includes("not found") ||
+    lowerMessage.includes("does not exist") ||
+    lowerMessage.includes("not exist")
+  ) {
+    return errorResponse(res, err.message || "Resource not found", null, 404);
+  }
+
   // Default error
   const statusCode = (err as any).statusCode || 500;
   const message = err.message || "Internal server error";

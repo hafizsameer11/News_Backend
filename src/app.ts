@@ -222,18 +222,110 @@ export const createApp = (): Express => {
     fs.mkdirSync(path.join(uploadsPath, "chunks"), { recursive: true });
   }
   
+  // Direct route handler for uploads (more reliable than express.static in some cases)
+  // This handles file serving with better error handling and logging
+  // Must be defined BEFORE express.static to take precedence
+  // Use wildcard to match any filename (including those with extensions)
+  app.get("/uploads/:filename", (req, res) => {
+    const filename = req.params.filename;
+    // Handle subdirectories (e.g., videos/file.mp4)
+    const filePath = path.join(uploadsPath, filename);
+    
+    // Security: prevent directory traversal
+    const resolvedPath = path.resolve(filePath);
+    const resolvedUploadsPath = path.resolve(uploadsPath);
+    if (!resolvedPath.startsWith(resolvedUploadsPath)) {
+      logger.warn(`Directory traversal attempt: ${req.path}`);
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      logger.warn(`File not found: ${filePath} (requested: ${req.path}, cwd: ${process.cwd()})`);
+      return res.status(404).json({ 
+        success: false, 
+        message: "File not found",
+        path: filePath,
+        uploadsPath,
+        cwd: process.cwd(),
+        requestedPath: req.path,
+      });
+    }
+
+    // Check if it's a file (not a directory)
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      return res.status(404).json({ success: false, message: "Not a file" });
+    }
+
+    // Set proper content type
+    const ext = path.extname(filePath).toLowerCase();
+    const contentTypes: Record<string, string> = {
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".png": "image/png",
+      ".gif": "image/gif",
+      ".webp": "image/webp",
+      ".mp4": "video/mp4",
+      ".webm": "video/webm",
+      ".mov": "video/quicktime",
+      ".avi": "video/x-msvideo",
+      ".mkv": "video/x-matroska",
+    };
+    if (contentTypes[ext]) {
+      res.setHeader("Content-Type", contentTypes[ext]);
+    }
+
+    // Set CORS headers
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.setHeader("Referrer-Policy", "unsafe-url");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+
+    // Send file
+    return res.sendFile(filePath);
+  });
+
+  // Static file serving for uploads (fallback for subdirectories)
+  // This must be before the 404 handler
   app.use(
     "/uploads",
+    (req, _res, next) => {
+      // Log static file requests for debugging
+      if (process.env.NODE_ENV === "development" || process.env.DEBUG_STATIC === "true") {
+        const requestedFile = path.join(uploadsPath, req.path.replace(/^\/uploads\//, ""));
+        logger.debug(`Static file request: ${req.path} -> ${requestedFile} (exists: ${fs.existsSync(requestedFile)})`);
+      }
+      next();
+    },
     express.static(uploadsPath, {
       dotfiles: "ignore",
       etag: true,
-      extensions: ["jpg", "jpeg", "png", "gif", "webp", "mp4", "webm", "mov", "avi", "mkv"],
       index: false,
       maxAge: "1y",
       setHeaders: (res, filePath) => {
-        // Set proper content type
-        if (filePath.endsWith(".mp4") || filePath.endsWith(".webm")) {
-          res.setHeader("Content-Type", "video/mp4");
+        // Set proper content type based on file extension
+        const ext = path.extname(filePath).toLowerCase();
+        const contentTypes: Record<string, string> = {
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".png": "image/png",
+          ".gif": "image/gif",
+          ".webp": "image/webp",
+          ".mp4": "video/mp4",
+          ".webm": "video/webm",
+          ".mov": "video/quicktime",
+          ".avi": "video/x-msvideo",
+          ".mkv": "video/x-matroska",
+        };
+        if (contentTypes[ext]) {
+          res.setHeader("Content-Type", contentTypes[ext]);
         }
         // Ensure CORS headers are set
         const origin = (res.req as any).headers?.origin;
@@ -263,6 +355,26 @@ export const createApp = (): Express => {
       exists: fs.existsSync(uploadsPath),
       files: testFiles,
       message: "Static file serving is configured",
+      cwd: process.cwd(),
+    });
+  });
+
+  // Diagnostic route to check if a specific file exists
+  app.get("/uploads/check/:filename", (req, res) => {
+    const { filename } = req.params;
+    const filePath = path.join(uploadsPath, filename);
+    const exists = fs.existsSync(filePath);
+    
+    res.json({
+      filename,
+      filePath,
+      exists,
+      uploadsPath,
+      cwd: process.cwd(),
+      stats: exists ? {
+        size: fs.statSync(filePath).size,
+        modified: fs.statSync(filePath).mtime,
+      } : null,
     });
   });
 

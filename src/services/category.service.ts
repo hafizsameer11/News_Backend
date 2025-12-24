@@ -83,7 +83,11 @@ export class CategoryService {
       },
     });
 
-    if (!category) throw new Error("Category not found");
+    if (!category) {
+      const error: any = new Error("Category not found");
+      error.statusCode = 404;
+      throw error;
+    }
 
     return category;
   }

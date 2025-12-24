@@ -19,10 +19,14 @@ const thumbnailDir = env.THUMBNAIL_DIR || "uploads/thumbnails";
 const storage = multer.diskStorage({
   destination: (_req, file, cb) => {
     // Route videos to video directory, images to main uploads
+    // Use absolute paths to ensure files are saved in the correct location
+    const baseDir = process.cwd();
     if (file.mimetype.startsWith("video/")) {
-      cb(null, videoUploadDir);
+      const videoPath = path.isAbsolute(videoUploadDir) ? videoUploadDir : path.join(baseDir, videoUploadDir);
+      cb(null, videoPath);
     } else {
-      cb(null, uploadDir);
+      const uploadPath = path.isAbsolute(uploadDir) ? uploadDir : path.join(baseDir, uploadDir);
+      cb(null, uploadPath);
     }
   },
   filename: (_req, file, cb) => {

@@ -40,6 +40,12 @@ export const tgController = {
   getPopularVideos: async (req: Request, res: Response) => {
     const limit = Number(req.query.limit) || 10;
     const result = await tgService.getPopularVideos(limit);
+    
+    // Return empty array if no videos found (200 status, not error)
+    if (!result || (Array.isArray(result) && result.length === 0)) {
+      return successResponse(res, "No popular videos found", []);
+    }
+    
     return successResponse(res, "Popular videos retrieved", result);
   },
 };

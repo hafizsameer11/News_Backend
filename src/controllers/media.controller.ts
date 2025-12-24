@@ -12,6 +12,14 @@ export const mediaController = {
       return errorResponse(res, "No file uploaded", null, 400);
     }
 
+    // Verify file was actually saved to disk
+    const filePath = req.file.path || path.join(req.file.destination || "uploads", req.file.filename);
+    const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath);
+    
+    if (!fs.existsSync(absoluteFilePath)) {
+      return errorResponse(res, "File was not saved to disk", { path: absoluteFilePath }, 500);
+    }
+
     const { caption, newsId } = req.body;
     const uploaderId = (req as any).user?.id; // Get user ID from authenticated request
     const uploaderRole = (req as any).user?.role; // Get user role from authenticated request
@@ -22,6 +30,12 @@ export const mediaController = {
       uploaderId,
       uploaderRole
     );
+
+    // Verify file still exists after saving to database
+    if (!fs.existsSync(absoluteFilePath)) {
+      return errorResponse(res, "File was deleted after upload", { path: absoluteFilePath }, 500);
+    }
+
     return successResponse(res, "File uploaded successfully", result, 201);
   },
 
