@@ -242,6 +242,13 @@ export class AdService {
   async createAd(data: any, userId: string) {
     const start = new Date(data.startDate);
     const end = new Date(data.endDate);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+
+    // Prevent past dates
+    if (start < now) {
+      throw new Error("Start date cannot be in the past");
+    }
 
     // Business logic validation
     if (end <= start) {
@@ -254,6 +261,17 @@ export class AdService {
     }
     if (days > MAX_AD_DURATION_DAYS) {
       throw new Error(`Ad duration cannot exceed ${MAX_AD_DURATION_DAYS} days`);
+    }
+
+    // Check for booking conflicts (only if position is specified)
+    // Slider ads can have multiple ads on same date, so we only check conflicts for fixed positions
+    if (data.position) {
+      const conflict = await this.checkBookingConflict(start, end, data.position);
+      if (conflict.isConflict) {
+        throw new Error(
+          `This date and position are already booked by ad: "${conflict.conflictingAd?.title}". Please select a different date or position.`
+        );
+      }
     }
 
     // Validate URLs are accessible (basic check - just format validation is done in validator)
@@ -399,11 +417,26 @@ export class AdService {
     }
 
     // Handle date conversions if dates are being updated
+    const now = new Date();
+    now.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+    
     if (updateData.startDate) {
       updateData.startDate = new Date(updateData.startDate);
+      // Prevent past dates
+      if (updateData.startDate < now) {
+        throw new Error("Start date cannot be in the past");
+      }
     }
+
     if (updateData.endDate) {
       updateData.endDate = new Date(updateData.endDate);
+    }
+
+    // Validate date range if both dates are being updated
+    if (updateData.startDate && updateData.endDate) {
+      if (updateData.endDate <= updateData.startDate) {
+        throw new Error("End date must be after start date");
+      }
     }
 
     // Recalculate price if dates or type changed (only if price wasn't explicitly provided)
@@ -414,6 +447,21 @@ export class AdService {
 
       const calculatedPrice = calculateAdPrice(adType, startDate, endDate);
       processedPrice = new Prisma.Decimal(Math.round(calculatedPrice * 100) / 100);
+    }
+
+    // Check for booking conflicts if dates or position are being updated
+    // Only check if position is specified (slider ads can have multiple on same date)
+    const positionToCheck = updateData.position !== undefined ? updateData.position : ad.position;
+    const startDateToCheck = updateData.startDate ? new Date(updateData.startDate) : new Date(ad.startDate);
+    const endDateToCheck = updateData.endDate ? new Date(updateData.endDate) : new Date(ad.endDate);
+
+    if (positionToCheck && (updateData.startDate || updateData.endDate || updateData.position !== undefined)) {
+      const conflict = await this.checkBookingConflict(startDateToCheck, endDateToCheck, positionToCheck, id);
+      if (conflict.isConflict) {
+        throw new Error(
+          `This date and position are already booked by ad: "${conflict.conflictingAd?.title}". Please select a different date or position.`
+        );
+      }
     }
 
     // Set the processed price if we have one
@@ -684,5 +732,181 @@ export class AdService {
         console.log(`Ad ${adId} marked as paid.`);
       }
     }
+  }
+
+  /**
+   * Get calendar data - booked dates with positions
+   * Returns dates that have active ads booked
+   */
+  async getCalendar(year?: number, month?: number) {
+    const now = new Date();
+    const startYear = year || now.getFullYear();
+    const startMonth = month !== undefined ? month : now.getMonth();
+
+    // Calculate date range for the requested month (start of first day to end of last day)
+    const startDate = new Date(startYear, startMonth, 1, 0, 0, 0, 0);
+    const endDate = new Date(startYear, startMonth + 1, 0, 23, 59, 59, 999);
+
+    logger.debug(`Fetching calendar for ${startYear}-${startMonth + 1}, date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
+    // Get all active ads that overlap with the requested month
+    // An ad overlaps if: ad.startDate <= monthEndDate AND ad.endDate >= monthStartDate
+    const bookedAds = await prisma.ad.findMany({
+      where: {
+        status: {
+          in: ["ACTIVE", "PENDING"], // Only count active or pending ads
+        },
+        // Simplified overlap check: ad overlaps if it starts before month ends AND ends after month starts
+        AND: [
+          {
+            startDate: {
+              lte: endDate,
+            },
+          },
+          {
+            endDate: {
+              gte: startDate,
+            },
+          },
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        startDate: true,
+        endDate: true,
+        position: true,
+        type: true,
+        status: true,
+      },
+    });
+
+    logger.debug(`Found ${bookedAds.length} ads that overlap with the requested month`);
+
+    // Group by date and position
+    const calendarData: Record<string, Array<{
+      position: string | null;
+      type: string;
+      title: string;
+      id: string;
+      status: string;
+    }>> = {};
+
+    bookedAds.forEach((ad) => {
+      const start = new Date(ad.startDate);
+      const end = new Date(ad.endDate);
+      
+      // Normalize dates to start of day (midnight) to avoid timezone issues
+      const startNormalized = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      const endNormalized = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      const startDateNormalized = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const endDateNormalized = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      
+      // Clamp the iteration range to the requested month
+      const iterationStart = startNormalized > startDateNormalized ? startNormalized : startDateNormalized;
+      const iterationEnd = endNormalized < endDateNormalized ? endNormalized : endDateNormalized;
+      
+      // Iterate through each day in the ad's date range (within the requested month)
+      const currentDate = new Date(iterationStart);
+      while (currentDate <= iterationEnd) {
+        // Format date key as YYYY-MM-DD (local date, not UTC)
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+        const day = String(currentDate.getDate()).padStart(2, "0");
+        const dateKey = `${year}-${month}-${day}`;
+        
+        if (!calendarData[dateKey]) {
+          calendarData[dateKey] = [];
+        }
+        
+        calendarData[dateKey].push({
+          position: ad.position || null,
+          type: ad.type,
+          title: ad.title,
+          id: ad.id,
+          status: ad.status,
+        });
+        
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+
+    // Log for debugging
+    logger.debug(`Calendar data for ${startYear}-${startMonth + 1}: ${bookedAds.length} ads found, ${Object.keys(calendarData).length} days with bookings`);
+
+    return calendarData;
+  }
+
+  /**
+   * Check if a date + position combination is already booked
+   */
+  async checkBookingConflict(
+    startDate: Date,
+    endDate: Date,
+    position: string | null,
+    excludeAdId?: string
+  ): Promise<{ isConflict: boolean; conflictingAd?: { id: string; title: string } }> {
+    const whereClause: any = {
+      status: {
+        in: ["ACTIVE", "PENDING"], // Only check active or pending ads
+      },
+      OR: [
+        // New ad starts during existing ad
+        {
+          startDate: { lte: startDate },
+          endDate: { gte: startDate },
+        },
+        // New ad ends during existing ad
+        {
+          startDate: { lte: endDate },
+          endDate: { gte: endDate },
+        },
+        // New ad completely contains existing ad
+        {
+          startDate: { gte: startDate },
+          endDate: { lte: endDate },
+        },
+        // Existing ad completely contains new ad
+        {
+          startDate: { lte: startDate },
+          endDate: { gte: endDate },
+        },
+      ],
+    };
+
+    // If position is specified, check for same position conflicts
+    // If position is null/empty, check for any position (for slider/rotating ads)
+    if (position) {
+      whereClause.position = position;
+    }
+
+    // Exclude current ad if updating
+    if (excludeAdId) {
+      whereClause.id = { not: excludeAdId };
+    }
+
+    const conflictingAd = await prisma.ad.findFirst({
+      where: whereClause,
+      select: {
+        id: true,
+        title: true,
+        startDate: true,
+        endDate: true,
+        position: true,
+      },
+    });
+
+    if (conflictingAd) {
+      return {
+        isConflict: true,
+        conflictingAd: {
+          id: conflictingAd.id,
+          title: conflictingAd.title,
+        },
+      };
+    }
+
+    return { isConflict: false };
   }
 }

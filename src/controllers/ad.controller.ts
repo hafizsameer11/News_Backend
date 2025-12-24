@@ -81,4 +81,31 @@ export const adController = {
     const result = await adService.getAdvertiserAnalytics(req.user.id);
     return successResponse(res, "Advertiser analytics retrieved", result);
   },
+
+  getCalendar: async (req: AuthenticatedRequest, res: Response) => {
+    const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+    const month = req.query.month ? parseInt(req.query.month as string) : undefined;
+    const result = await adService.getCalendar(year, month);
+    return successResponse(res, "Calendar data retrieved", result);
+  },
+
+  checkConflict: async (req: AuthenticatedRequest, res: Response) => {
+    const { startDate, endDate, position, excludeAdId } = req.body;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "startDate and endDate are required",
+      });
+    }
+
+    const conflict = await adService.checkBookingConflict(
+      new Date(startDate),
+      new Date(endDate),
+      position || null,
+      excludeAdId
+    );
+
+    return successResponse(res, conflict.isConflict ? "Booking conflict found" : "No conflict", conflict);
+  },
 };

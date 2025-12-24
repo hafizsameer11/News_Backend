@@ -520,4 +520,77 @@ router.post(
   asyncHandler(adController.reject)
 );
 
+/**
+ * @openapi
+ * /ads/calendar:
+ *   get:
+ *     tags:
+ *       - Ads
+ *     summary: Get ad calendar (booked dates)
+ *     description: Get calendar data showing which dates have ads booked. Returns dates with their booked positions.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: year
+ *         schema:
+ *           type: integer
+ *         description: Year (optional, defaults to current year)
+ *       - in: query
+ *         name: month
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *           maximum: 11
+ *         description: Month (0-11, optional, defaults to current month)
+ *     responses:
+ *       200:
+ *         description: Calendar data retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/calendar", authGuard([ROLE.ADMIN, ROLE.ADVERTISER, ROLE.SUPER_ADMIN]), asyncHandler(adController.getCalendar));
+
+/**
+ * @openapi
+ * /ads/check-conflict:
+ *   post:
+ *     tags:
+ *       - Ads
+ *     summary: Check booking conflict
+ *     description: Check if a date range + position combination is already booked
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - startDate
+ *               - endDate
+ *             properties:
+ *               startDate:
+ *                 type: string
+ *                 format: date-time
+ *               endDate:
+ *                 type: string
+ *                 format: date-time
+ *               position:
+ *                 type: string
+ *                 nullable: true
+ *               excludeAdId:
+ *                 type: string
+ *                 format: uuid
+ *     responses:
+ *       200:
+ *         description: Conflict check completed
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ */
+router.post("/check-conflict", authGuard([ROLE.ADMIN, ROLE.ADVERTISER, ROLE.SUPER_ADMIN]), asyncHandler(adController.checkConflict));
+
 export default router;
