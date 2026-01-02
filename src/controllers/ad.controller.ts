@@ -14,7 +14,7 @@ export const adController = {
 
   create: async (req: AuthenticatedRequest, res: Response) => {
     if (!req.user) throw new Error("Unauthorized");
-    const result = await adService.createAd(req.body, req.user.id);
+    const result = await adService.createAd(req.body, req.user.id, req.user.role);
     return successResponse(res, "Ad created", result, 201);
   },
 

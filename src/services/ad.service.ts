@@ -67,7 +67,7 @@ export class AdService {
       // This allows backward compatibility with ads that only have type set
       const slotToTypeMap: Record<string, string[]> = {
         HEADER: ["BANNER_TOP"],
-        TOP_BANNER: ["BANNER_TOP"],
+        TOP_BANNER: ["BANNER_TOP", "SLIDER_TOP"], // TOP_BANNER can be either banner or slider top
         SIDEBAR: ["BANNER_SIDE"],
         INLINE: ["INLINE"],
         FOOTER: ["FOOTER"],
@@ -190,8 +190,8 @@ export class AdService {
         }
       }
 
-      // For SLIDER type, return array; otherwise return single ad
-      if (selectedAd.type === "SLIDER") {
+      // For SLIDER and SLIDER_TOP types, return array; otherwise return single ad
+      if (selectedAd.type === "SLIDER" || selectedAd.type === "SLIDER_TOP") {
         // Return multiple ads for slider (up to limit)
         ads = matchingAds.slice(0, Number(limit));
         total = matchingAds.length;
@@ -239,7 +239,7 @@ export class AdService {
   /**
    * Create Ad (Advertiser/Admin)
    */
-  async createAd(data: any, userId: string) {
+  async createAd(data: any, userId: string, role?: ROLE) {
     const start = new Date(data.startDate);
     const end = new Date(data.endDate);
     const now = new Date();
@@ -279,9 +279,19 @@ export class AdService {
 
     // Calculate price using configurable rates
     // Allow price override if provided (admin can set custom price)
-    const priceValue = data.price
-      ? (typeof data.price === "string" ? parseFloat(data.price) : data.price)
-      : calculateAdPrice(data.type, start, end);
+    let priceValue: number;
+    if (data.price !== undefined && data.price !== null && data.price !== "") {
+      // Handle both string and number inputs
+      if (typeof data.price === "string") {
+        priceValue = parseFloat(data.price);
+      } else if (typeof data.price === "number") {
+        priceValue = data.price;
+      } else {
+        throw new Error("Price must be a valid number");
+      }
+    } else {
+      priceValue = calculateAdPrice(data.type, start, end);
+    }
 
     // Validate price is a valid number
     if (isNaN(priceValue) || priceValue < 0) {
@@ -297,13 +307,17 @@ export class AdService {
     // Round to 2 decimal places and convert to Decimal type
     const calculatedPrice = new Prisma.Decimal(Math.round(priceValue * 100) / 100);
 
+    // Auto-activate ads created by admins
+    const isAdmin = role === ROLE.ADMIN || role === ROLE.SUPER_ADMIN;
+    const adStatus = isAdmin ? "ACTIVE" : "PENDING";
+
     return await prisma.ad.create({
       data: {
         ...data,
         price: calculatedPrice,
         advertiserId: userId,
-        status: "PENDING", // Pending payment or approval
-        isPaid: false,
+        status: adStatus, // Active for admins, Pending for advertisers
+        isPaid: isAdmin, // Mark as paid if created by admin
       },
     });
   }

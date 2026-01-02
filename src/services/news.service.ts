@@ -292,13 +292,23 @@ export class NewsService {
       }
     }
 
+    // Use provided publishedAt if available, otherwise set to current date when publishing
+    let publishedAtValue: Date | null = null;
+    if (data.status === NEWS_STATUS.PUBLISHED) {
+      if (data.publishedAt) {
+        publishedAtValue = new Date(data.publishedAt);
+      } else {
+        publishedAtValue = new Date();
+      }
+    }
+
     const news = await prisma.news.create({
       data: {
         ...newsData,
         content: sanitizedContent,
         summary: sanitizedSummary,
         authorId: userId,
-        publishedAt: data.status === NEWS_STATUS.PUBLISHED ? new Date() : null,
+        publishedAt: publishedAtValue,
       },
     });
 
@@ -416,14 +426,27 @@ export class NewsService {
       }
     }
 
+    // Handle publishedAt: use provided value, or set to current date when publishing for first time, or keep existing
+    let publishedAtValue = news.publishedAt;
+    if (data.status === NEWS_STATUS.PUBLISHED) {
+      if (data.publishedAt) {
+        // Use provided retroactive date
+        publishedAtValue = new Date(data.publishedAt);
+      } else if (news.status !== NEWS_STATUS.PUBLISHED) {
+        // First time publishing, use current date
+        publishedAtValue = new Date();
+      }
+      // If already published and no new publishedAt provided, keep existing
+    } else if (data.publishedAt !== undefined) {
+      // Allow setting publishedAt even if status is not PUBLISHED (for drafts with retroactive date)
+      publishedAtValue = data.publishedAt ? new Date(data.publishedAt) : null;
+    }
+
     const updatedNews = await prisma.news.update({
       where: { id },
       data: {
         ...updateData,
-        publishedAt:
-          data.status === NEWS_STATUS.PUBLISHED && news.status !== NEWS_STATUS.PUBLISHED
-            ? new Date()
-            : news.publishedAt,
+        publishedAt: publishedAtValue,
       },
     });
 

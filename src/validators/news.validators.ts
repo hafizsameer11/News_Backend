@@ -18,6 +18,7 @@ export const createNewsValidator = z.object({
     isFeatured: z.boolean().optional(),
     isTG: z.boolean().optional(),
     scheduledFor: z.string().datetime().optional(),
+    publishedAt: z.string().datetime().optional(), // Retroactive publishing date
   }),
 });
 
@@ -42,5 +43,6 @@ export const updateNewsValidator = z.object({
     isFeatured: z.boolean().optional(),
     isTG: z.boolean().optional(),
     scheduledFor: z.string().datetime().nullable().optional(),
+    publishedAt: z.string().datetime().nullable().optional(), // Retroactive publishing date
   }),
 });

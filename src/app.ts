@@ -1,6 +1,5 @@
 import express, { Express } from "express";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
 import swaggerUi from "swagger-ui-express";
 // import helmet from "helmet"; // Disabled to avoid CORS conflicts
 import compression from "compression";
@@ -141,14 +140,6 @@ export const createApp = (): Express => {
   // Documentation
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   logger.info(`📄 Swagger Docs available at http://localhost:${env.PORT}/api-docs`);
-
-  // Rate limiting
-  const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10000, // Limit each IP to 100 requests per windowMs
-    message: "Too many requests from this IP, please try again later.",
-  });
-  app.use("/api/v1/", limiter);
 
   // Webhook routes must be before JSON parser (handles raw body)
   // Increase limit for webhooks as well (Stripe webhooks can be large)

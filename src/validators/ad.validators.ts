@@ -8,6 +8,7 @@ const AdTypeEnum = z.enum([
   "INLINE",
   "FOOTER",
   "SLIDER",
+  "SLIDER_TOP",
   "TICKER",
   "POPUP",
   "STICKY",
@@ -75,19 +76,31 @@ export const createAdValidator = z
     body: z
       .object({
         title: z.string().min(1, "Title is required"),
+        name: z.string().optional(), // Optional display name for easier identification
         type: AdTypeEnum,
         imageUrl: z
           .string()
           .url("Invalid image URL")
           .max(2048, "Image URL is too long (max 2048 characters)"),
         targetLink: z
-          .string()
-          .url("Invalid target link URL")
-          .max(2048, "Target link URL is too long (max 2048 characters)"),
+          .union([
+            z.string().url("Invalid target link URL").max(2048, "Target link URL is too long (max 2048 characters)"),
+            z.literal(""),
+          ])
+          .optional()
+          .transform((val) => (val === "" ? undefined : val)),
         position: PositionEnum.optional(),
         startDate: z.string().datetime("Invalid start date format"),
         endDate: z.string().datetime("Invalid end date format"),
-        price: z.number().positive().optional(), // Optional as it might be calculated
+        price: z
+          .union([z.number(), z.string()])
+          .optional()
+          .transform((val) => {
+            if (val === undefined || val === null || val === "") return undefined;
+            const num = typeof val === "string" ? parseFloat(val) : val;
+            return isNaN(num) ? undefined : num;
+          })
+          .pipe(z.number().positive().optional()), // Optional as it might be calculated
       })
       .and(dateRangeValidation),
   })
@@ -125,6 +138,7 @@ export const updateAdValidator = z
     body: z
       .object({
         title: z.string().min(1, "Title is required").optional(),
+        name: z.string().optional(), // Optional display name for easier identification
         type: AdTypeEnum.optional(),
         imageUrl: z
           .string()
@@ -141,10 +155,14 @@ export const updateAdValidator = z
         startDate: z.string().datetime("Invalid start date format").optional(),
         endDate: z.string().datetime("Invalid end date format").optional(),
         price: z
-          .number()
-          .positive("Price must be a positive number")
-          .max(99999999.99, "Price cannot exceed 99,999,999.99")
-          .optional(),
+          .union([z.number(), z.string()])
+          .optional()
+          .transform((val) => {
+            if (val === undefined || val === null || val === "") return undefined;
+            const num = typeof val === "string" ? parseFloat(val) : val;
+            return isNaN(num) ? undefined : num;
+          })
+          .pipe(z.number().positive("Price must be a positive number").max(99999999.99, "Price cannot exceed 99,999,999.99").optional()),
       })
       .refine(
         (data) => {

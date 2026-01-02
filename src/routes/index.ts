@@ -26,6 +26,7 @@ import statsRoutes from "./stats.routes";
 import analyticsRoutes from "./analytics.routes";
 import paymentRoutes from "./payment.routes";
 import chatRoutes from "./chat.routes";
+import memoRoutes from "./memo.routes";
 import homepageRoutes from "./homepage.routes";
 import bookmarkRoutes from "./bookmark.routes";
 import configRoutes from "./config.routes";
@@ -215,6 +216,7 @@ router.use("/stats", statsRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/payment", paymentRoutes);
 router.use("/chat", chatRoutes);
+router.use("/memo", memoRoutes);
 router.use("/homepage", homepageRoutes);
 router.use("/bookmarks", bookmarkRoutes);
 router.use("/config", configRoutes); // Public config (no auth required)
