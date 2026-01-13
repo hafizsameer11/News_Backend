@@ -44,6 +44,28 @@ const router = Router();
  */
 router.get("/", asyncHandler(newsController.getAll));
 
+// Protected Routes (Admin, Editor, Super Admin)
+router.use(authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR]));
+
+/**
+ * @openapi
+ * /news/export:
+ *   get:
+ *     tags: [News]
+ *     summary: Export all news to Excel
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Excel file download
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
+router.get("/export", asyncHandler(newsController.export));
+
 /**
  * @openapi
  * /news/{idOrSlug}:
@@ -61,9 +83,6 @@ router.get("/", asyncHandler(newsController.getAll));
  *         description: News details
  */
 router.get("/:idOrSlug", asyncHandler(newsController.getOne));
-
-// Protected Routes (Admin, Editor, Super Admin)
-router.use(authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR]));
 
 /**
  * @openapi

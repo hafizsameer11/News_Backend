@@ -8,6 +8,7 @@ import { sanitizeHtmlContent } from "@/utils/sanitize";
 import { getAbsoluteUrl, normalizeUrl } from "@/utils/url";
 import { SocialService } from "./social.service";
 import { PLATFORM } from "@/types/enums";
+import ExcelJS from "exceljs";
 
 export class NewsService {
   /**
@@ -534,5 +535,109 @@ export class NewsService {
 
     // Delete the news (bookmarks and viewLogs will be deleted automatically due to cascade)
     return await prisma.news.delete({ where: { id } });
+  }
+
+  /**
+   * Export all news to Excel
+   */
+  async exportNewsToExcel(): Promise<Buffer> {
+    // Fetch all news with all related data
+    const allNews = await prisma.news.findMany({
+      include: {
+        category: { select: { id: true, nameEn: true, nameIt: true, slug: true } },
+        author: { select: { id: true, name: true, email: true } },
+        gallery: { select: { id: true, url: true, type: true, caption: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Create a new workbook
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("News");
+
+    // Define columns
+    worksheet.columns = [
+      { header: "ID", key: "id", width: 36 },
+      { header: "Title", key: "title", width: 40 },
+      { header: "Slug", key: "slug", width: 40 },
+      { header: "Summary", key: "summary", width: 50 },
+      { header: "Content", key: "content", width: 80 },
+      { header: "Main Image URL", key: "mainImage", width: 50 },
+      { header: "Gallery Images", key: "gallery", width: 80 },
+      { header: "Category (EN)", key: "categoryEn", width: 25 },
+      { header: "Category (IT)", key: "categoryIt", width: 25 },
+      { header: "Category Slug", key: "categorySlug", width: 30 },
+      { header: "Author Name", key: "authorName", width: 25 },
+      { header: "Author Email", key: "authorEmail", width: 30 },
+      { header: "Status", key: "status", width: 15 },
+      { header: "Language", key: "language", width: 10 },
+      { header: "Is Breaking", key: "isBreaking", width: 12 },
+      { header: "Is Featured", key: "isFeatured", width: 12 },
+      { header: "Is TG", key: "isTG", width: 8 },
+      { header: "Tags", key: "tags", width: 30 },
+      { header: "Views", key: "views", width: 10 },
+      { header: "Published At", key: "publishedAt", width: 20 },
+      { header: "Scheduled For", key: "scheduledFor", width: 20 },
+      { header: "Created At", key: "createdAt", width: 20 },
+      { header: "Updated At", key: "updatedAt", width: 20 },
+    ];
+
+    // Style the header row
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE0E0E0" },
+    };
+
+    // Add data rows
+    allNews.forEach((news) => {
+      // Convert gallery images to a string (comma-separated URLs)
+      const galleryUrls = news.gallery
+        .map((media) => {
+          const url = getAbsoluteUrl(media.url);
+          return media.caption ? `${url} (${media.caption})` : url;
+        })
+        .join("; ");
+
+      // Format dates
+      const formatDate = (date: Date | null) => {
+        if (!date) return "";
+        return new Date(date).toISOString().replace("T", " ").split(".")[0];
+      };
+
+      worksheet.addRow({
+        id: news.id,
+        title: news.title,
+        slug: news.slug,
+        summary: news.summary || "",
+        content: news.content || "",
+        mainImage: news.mainImage ? getAbsoluteUrl(news.mainImage) : "",
+        gallery: galleryUrls,
+        categoryEn: news.category?.nameEn || "",
+        categoryIt: news.category?.nameIt || "",
+        categorySlug: news.category?.slug || "",
+        authorName: news.author?.name || "",
+        authorEmail: news.author?.email || "",
+        status: news.status,
+        language: news.language,
+        isBreaking: news.isBreaking ? "Yes" : "No",
+        isFeatured: news.isFeatured ? "Yes" : "No",
+        isTG: news.isTG ? "Yes" : "No",
+        tags: news.tags || "",
+        views: news.views || 0,
+        publishedAt: formatDate(news.publishedAt),
+        scheduledFor: formatDate(news.scheduledFor),
+        createdAt: formatDate(news.createdAt),
+        updatedAt: formatDate(news.updatedAt),
+      });
+    });
+
+    // Freeze the header row
+    worksheet.views = [{ state: "frozen", ySplit: 1 }];
+
+    // Generate buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
   }
 }

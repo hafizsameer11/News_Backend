@@ -58,4 +58,15 @@ export const newsController = {
     await newsService.deleteNews(req.params.id, req.user.id, req.user.role);
     return successResponse(res, "News deleted");
   },
+
+  export: async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) throw new Error("Unauthorized");
+    const buffer = await newsService.exportNewsToExcel();
+    
+    const filename = `news-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  },
 };
