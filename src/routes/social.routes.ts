@@ -120,6 +120,62 @@ router.post(
 
 /**
  * @openapi
+ * /social/connect/facebook-page:
+ *   post:
+ *     tags:
+ *       - Social Media
+ *     summary: Connect Facebook page using page access token
+ *     description: Connect a Facebook page directly using a page access token. Useful for connecting pages without OAuth flow.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - pageId
+ *               - pageAccessToken
+ *               - pageName
+ *             properties:
+ *               pageId:
+ *                 type: string
+ *                 description: Facebook Page ID
+ *               pageAccessToken:
+ *                 type: string
+ *                 description: Page Access Token (long-lived token)
+ *               pageName:
+ *                 type: string
+ *                 description: Page name (optional, will be fetched if not provided)
+ *     responses:
+ *       200:
+ *         description: Page connected successfully
+ *       400:
+ *         description: Validation error
+ */
+router.post(
+  "/connect/facebook-page",
+  authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN]),
+  asyncHandler(async (req, res) => {
+    const { pageId, pageAccessToken, pageName } = req.body;
+    if (!pageId || !pageAccessToken) {
+      return res.status(400).json({
+        success: false,
+        message: "pageId and pageAccessToken are required",
+      });
+    }
+    const result = await socialService.connectFacebookPageWithToken(
+      pageId,
+      pageAccessToken,
+      pageName
+    );
+    return successResponse(res, "Facebook page connected", { account: result });
+  })
+);
+
+/**
+ * @openapi
  * /social/{id}:
  *   delete:
  *     tags:

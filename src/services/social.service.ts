@@ -304,6 +304,78 @@ export class SocialService {
   }
 
   /**
+   * Connect Facebook page using App ID and Secret
+   * This method allows connecting a Facebook page directly using a page access token
+   */
+  async connectFacebookPageWithToken(
+    pageId: string,
+    pageAccessToken: string,
+    pageName: string
+  ) {
+    try {
+      // Validate the token by getting page info
+      const pageInfo = await facebookClient.getPageInfo(pageId, pageAccessToken);
+
+      // Calculate token expiry (60 days from now for long-lived tokens)
+      const tokenExpiry = new Date();
+      tokenExpiry.setDate(tokenExpiry.getDate() + 60);
+
+      // Check if account already exists
+      const existing = await prisma.socialAccount.findFirst({
+        where: {
+          platform: "FACEBOOK",
+          isActive: true,
+        },
+      });
+
+      if (existing) {
+        // Update existing account
+        return await prisma.socialAccount.update({
+          where: { id: existing.id },
+          data: {
+            accessToken: pageAccessToken,
+            accountId: pageId,
+            name: pageName || pageInfo.name,
+            tokenExpiry,
+            isActive: true,
+          },
+          select: {
+            id: true,
+            platform: true,
+            accountId: true,
+            name: true,
+            isActive: true,
+            createdAt: true,
+          },
+        });
+      }
+
+      // Create new account
+      return await prisma.socialAccount.create({
+        data: {
+          platform: "FACEBOOK",
+          accessToken: pageAccessToken,
+          accountId: pageId,
+          name: pageName || pageInfo.name,
+          tokenExpiry,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          platform: true,
+          accountId: true,
+          name: true,
+          isActive: true,
+          createdAt: true,
+        },
+      });
+    } catch (error: any) {
+      logger.error("Facebook page connection error:", error);
+      throw new Error(`Failed to connect Facebook page: ${error.message}`);
+    }
+  }
+
+  /**
    * Post to Social Media (Real Implementation)
    */
   async postToSocial(newsId: string, platforms: PLATFORM[]) {

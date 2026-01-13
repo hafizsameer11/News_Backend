@@ -6,6 +6,8 @@ import { logger } from "@/utils/logger";
 import { ga4Client } from "@/lib/ga4-client";
 import { sanitizeHtmlContent } from "@/utils/sanitize";
 import { getAbsoluteUrl, normalizeUrl } from "@/utils/url";
+import { SocialService } from "./social.service";
+import { PLATFORM } from "@/types/enums";
 
 export class NewsService {
   /**
@@ -276,8 +278,8 @@ export class NewsService {
     const sanitizedContent = data.content ? sanitizeHtmlContent(data.content) : data.content;
     const sanitizedSummary = data.summary ? sanitizeHtmlContent(data.summary) : data.summary;
 
-    // Remove mainImageId if present (not in schema, only mainImage URL is stored)
-    const { mainImageId: _mainImageId, ...newsData } = data;
+    // Remove mainImageId and socialMediaPlatforms if present (not in schema)
+    const { mainImageId: _mainImageId, socialMediaPlatforms: _socialMediaPlatforms, ...newsData } = data;
 
     // Convert mainImage URL to absolute if provided
     // Only convert if it's a relative URL, otherwise use as-is (already absolute)
@@ -325,6 +327,20 @@ export class NewsService {
       } catch (error) {
         // Log error but don't fail the news creation
         logger.error("Failed to send breaking news alert:", error);
+      }
+    }
+
+    // Post to social media if news is published and platforms are specified
+    if (data.status === NEWS_STATUS.PUBLISHED && _socialMediaPlatforms) {
+      const platforms = _socialMediaPlatforms as PLATFORM[];
+      if (platforms && Array.isArray(platforms) && platforms.length > 0) {
+        try {
+          const socialService = new SocialService();
+          await socialService.postToSocial(news.id, platforms);
+        } catch (error) {
+          // Log error but don't fail the news creation
+          logger.error("Failed to post to social media:", error);
+        }
       }
     }
 
@@ -404,8 +420,8 @@ export class NewsService {
     }
 
     // Sanitize HTML content if provided
-    // Remove mainImageId if present (not in schema, only mainImage URL is stored)
-    const { mainImageId: _mainImageId, ...restData } = data;
+    // Remove mainImageId and socialMediaPlatforms if present (not in schema)
+    const { mainImageId: _mainImageId, socialMediaPlatforms: _socialMediaPlatforms, ...restData } = data;
     const updateData: any = { ...restData };
     if (data.content) {
       updateData.content = sanitizeHtmlContent(data.content);
@@ -470,6 +486,20 @@ export class NewsService {
       }
     }
 
+    // Post to social media if news is published and platforms are specified
+    if (data.status === NEWS_STATUS.PUBLISHED && _socialMediaPlatforms) {
+      const platforms = _socialMediaPlatforms as PLATFORM[];
+      if (platforms && Array.isArray(platforms) && platforms.length > 0) {
+        try {
+          const socialService = new SocialService();
+          await socialService.postToSocial(updatedNews.id, platforms);
+        } catch (error) {
+          // Log error but don't fail the news update
+          logger.error("Failed to post to social media:", error);
+        }
+      }
+    }
+
     return this.convertNewsUrls(updatedNews);
   }
 
@@ -485,12 +515,24 @@ export class NewsService {
       throw new Error("You can only delete your own articles");
     }
 
+    // Delete related records that don't have cascade delete
+    // This must be done before deleting the news to avoid foreign key constraint errors
+    await Promise.all([
+      // Delete media gallery items
+      prisma.media.deleteMany({ where: { newsId: id } }),
+      // Delete social post logs
+      prisma.socialPostLog.deleteMany({ where: { newsId: id } }),
+      // Delete breaking news alerts
+      prisma.breakingNewsAlert.deleteMany({ where: { newsId: id } }),
+    ]);
+
     // Invalidate cache before deletion
     await cacheService.invalidateNews(id);
     if (news.status === NEWS_STATUS.PUBLISHED) {
       await cacheService.invalidateSitemap();
     }
 
+    // Delete the news (bookmarks and viewLogs will be deleted automatically due to cascade)
     return await prisma.news.delete({ where: { id } });
   }
 }
