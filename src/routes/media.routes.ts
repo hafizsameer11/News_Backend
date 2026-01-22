@@ -15,16 +15,32 @@ router.post(
     upload.single("file")(req, res, (err) => {
       if (err) {
         // Handle multer errors (file type, file size, etc.)
+        let statusCode = 400;
+        let errorMessage = "File upload error";
+
         if (err instanceof Error) {
-          return res.status(400).json({
-            success: false,
-            message: err.message || "File upload error",
-            data: null,
-          });
+          errorMessage = err.message;
+          
+          // Handle specific multer error codes
+          if ("code" in err) {
+            switch (err.code) {
+              case "LIMIT_FILE_SIZE":
+                statusCode = 413;
+                errorMessage = "File too large. Maximum size is 1GB.";
+                break;
+              case "LIMIT_FILE_COUNT":
+                errorMessage = "Too many files. Only one file allowed.";
+                break;
+              case "LIMIT_UNEXPECTED_FILE":
+                errorMessage = "Unexpected file field. Use 'file' as the field name.";
+                break;
+            }
+          }
         }
-        return res.status(400).json({
+
+        return res.status(statusCode).json({
           success: false,
-          message: "File upload error",
+          message: errorMessage,
           data: null,
         });
       }

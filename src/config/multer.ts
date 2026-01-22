@@ -72,12 +72,12 @@ const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFil
   }
 };
 
-// Standard upload (for images and small videos)
+// Standard upload (for images and videos - used for news media uploads)
 export const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit for standard uploads
+    fileSize: env.MAX_MEDIA_SIZE || 1073741824, // 1GB default (can be configured via MAX_MEDIA_SIZE env var)
   },
 });
 

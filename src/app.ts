@@ -146,10 +146,19 @@ export const createApp = (): Express => {
   app.use("/api/v1/payment/webhook", express.raw({ type: "application/json", limit: "10mb" }));
   app.use("/api/v1/social/webhook", express.raw({ type: "application/json", limit: "10mb" }));
 
+  // Media upload route - skip body parsing (multer handles multipart/form-data)
+  // Note: express.json and express.urlencoded don't parse multipart/form-data anyway,
+  // but we explicitly skip them here to ensure no interference
+  app.use("/api/v1/media/upload", (_req, _res, next) => {
+    // Multer will handle multipart/form-data, so just pass through
+    next();
+  });
+
   // Body parsing middleware with increased size limits for large content
-  // Default is 100kb, increasing to 50MB to handle large news articles with rich content
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+  // Default is 100kb, increasing to 1GB to handle large file uploads
+  // Note: multipart/form-data is handled by multer, not these parsers
+  app.use(express.json({ limit: "1gb" }));
+  app.use(express.urlencoded({ extended: true, limit: "1gb" }));
 
   // Request logging (skip verbose analytics tracking logs)
   app.use((req, _res, next) => {

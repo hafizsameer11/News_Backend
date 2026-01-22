@@ -1,6 +1,7 @@
 import prisma from "@/config/prisma";
 import { cacheService } from "./cache.service";
 import { NEWS_STATUS, ROLE } from "@/types/enums";
+import { Role } from "@prisma/client";
 import { breakingNewsService } from "./breaking-news.service";
 import { logger } from "@/utils/logger";
 import { ga4Client } from "@/lib/ga4-client";
@@ -227,24 +228,28 @@ export class NewsService {
     const category = await prisma.category.findUnique({ where: { id: data.categoryId } });
     if (!category) throw new Error("Category not found");
 
-    // Check category permissions for Editor
+    // Check category permissions for Editor and Pro Loco
     // (This logic could be in controller or here)
     let user;
     try {
       user = await prisma.user.findUnique({
         where: { id: userId },
-        include: { allowedCategories: true },
+        include: { 
+          allowedCategories: true,
+          prolocoAllowedCategories: true,
+        } as any,
       });
     } catch (error: any) {
-      // If _EditorCategories table doesn't exist, get user without categories
-      if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
-        logger.warn("_EditorCategories table not found, fetching user without categories");
+      // If _EditorCategories or _ProlocoCategories tables don't exist, get user without categories
+      if (error.message?.includes("_EditorCategories") || error.message?.includes("_ProlocoCategories") || error.message?.includes("does not exist")) {
+        logger.warn("Category relation tables not found, fetching user without categories");
         user = await prisma.user.findUnique({
           where: { id: userId },
         });
         // Add empty categories array to match expected structure
         if (user) {
           (user as any).allowedCategories = [];
+          (user as any).prolocoAllowedCategories = [];
         }
       } else {
         throw error;
@@ -262,6 +267,25 @@ export class NewsService {
       // For now assuming Editors can publish unless restricted
       // But let's default to PENDING_REVIEW for editors if status not explicitly set?
       // The validator defaults to DRAFT.
+    }
+
+    // Check category permissions for Pro Loco
+    if (user?.role === Role.PROLOCO) {
+      // Pro Loco users must be approved
+      if ((user as any).prolocoStatus !== "APPROVED") {
+        throw new Error("Your Pro Loco account is pending approval. Please wait for admin approval.");
+      }
+
+      const allowedCategories = (user as any).prolocoAllowedCategories || [];
+      const hasPermission = allowedCategories.some((c: any) => c.id === data.categoryId);
+      if (!hasPermission) {
+        throw new Error("You do not have permission to post in this category. Please contact admin to assign categories.");
+      }
+
+      // Pro Loco posts always go to PENDING_REVIEW (admin must approve)
+      if (data.status === NEWS_STATUS.PUBLISHED) {
+        data.status = NEWS_STATUS.PENDING_REVIEW;
+      }
     }
 
     // Validate mainImage URL if provided
@@ -371,18 +395,22 @@ export class NewsService {
         try {
           user = await prisma.user.findUnique({
             where: { id: userId },
-            include: { allowedCategories: true },
+            include: { 
+              allowedCategories: true,
+              prolocoAllowedCategories: true,
+            },
           });
         } catch (error: any) {
-          // If _EditorCategories table doesn't exist, get user without categories
-          if (error.message?.includes("_EditorCategories") || error.message?.includes("does not exist")) {
-            logger.warn("_EditorCategories table not found, fetching user without categories");
+          // If _EditorCategories or _ProlocoCategories tables don't exist, get user without categories
+          if (error.message?.includes("_EditorCategories") || error.message?.includes("_ProlocoCategories") || error.message?.includes("does not exist")) {
+            logger.warn("Category relation tables not found, fetching user without categories");
             user = await prisma.user.findUnique({
               where: { id: userId },
             });
             // Add empty categories array to match expected structure
             if (user) {
               (user as any).allowedCategories = [];
+              (user as any).prolocoAllowedCategories = [];
             }
           } else {
             throw error;
@@ -390,10 +418,25 @@ export class NewsService {
         }
 
         if (user) {
-          const allowedCategories = (user as any).allowedCategories || [];
-          const hasPermission = allowedCategories.some((c: any) => c.id === data.categoryId);
-          if (!hasPermission) {
-            throw new Error("You do not have permission to post in this category");
+          if (user.role === ROLE.EDITOR) {
+            const allowedCategories = (user as any).allowedCategories || [];
+            const hasPermission = allowedCategories.some((c: any) => c.id === data.categoryId);
+            if (!hasPermission) {
+              throw new Error("You do not have permission to post in this category");
+            }
+          } else if (user.role === Role.PROLOCO) {
+            if ((user as any).prolocoStatus !== "APPROVED") {
+              throw new Error("Your Pro Loco account is pending approval.");
+            }
+            const allowedCategories = (user as any).prolocoAllowedCategories || [];
+            const hasPermission = allowedCategories.some((c: any) => c.id === data.categoryId);
+            if (!hasPermission) {
+              throw new Error("You do not have permission to post in this category. Please contact admin to assign categories.");
+            }
+            // Pro Loco posts always go to PENDING_REVIEW
+            if (data.status === NEWS_STATUS.PUBLISHED) {
+              data.status = NEWS_STATUS.PENDING_REVIEW;
+            }
           }
         }
       }

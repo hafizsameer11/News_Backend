@@ -46,6 +46,8 @@ const envSchema = z.object({
   VIDEO_CHUNK_SIZE: z.string().transform(Number).default("5242880"), // 5MB in bytes
   VIDEO_UPLOAD_DIR: z.string().default("uploads/videos"),
   THUMBNAIL_DIR: z.string().default("uploads/thumbnails"),
+  // Media upload configuration (for news and general media)
+  MAX_MEDIA_SIZE: z.string().transform(Number).default("1073741824"), // 1GB in bytes
   FFMPEG_PATH: z.string().optional(),
   ENABLE_VIDEO_TRANSCODING: z
     .string()

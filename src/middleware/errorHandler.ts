@@ -43,7 +43,36 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
     if (err.code === "P2025") {
       return errorResponse(res, "Record not found", null, 404);
     }
+    // Check if it's a schema/column error
+    if (err.message?.includes("does not exist")) {
+      return errorResponse(res, "Database schema error. Please contact the administrator.", null, 500);
+    }
+    // Check for data truncation errors (e.g., enum values not matching)
+    if (err.message?.includes("Data truncated") || err.message?.includes("code: 1265")) {
+      return errorResponse(res, "Invalid data value. Please contact the administrator.", null, 500);
+    }
     return errorResponse(res, "Database error", err.message, 500);
+  }
+
+  // Check for Prisma schema errors in regular Error messages
+  if (err.message?.includes("does not exist") && err.message?.includes("column")) {
+    return errorResponse(res, "Database configuration error. Please contact the administrator.", null, 500);
+  }
+  
+  // Check for MySQL data truncation errors (including ConnectorError)
+  if (err.message?.includes("Data truncated") || err.message?.includes("code: 1265") || err.message?.includes("ConnectorError")) {
+    if (err.message?.includes("role")) {
+      return errorResponse(res, "Invalid role value. The role enum may not include the required value. Please contact the administrator.", null, 500);
+    }
+    return errorResponse(res, "Invalid data value. Please contact the administrator.", null, 500);
+  }
+  
+  // Check for MySQL data truncation errors
+  if (err.message?.includes("Data truncated") || err.message?.includes("code: 1265") || err.message?.includes("ConnectorError")) {
+    if (err.message?.includes("role")) {
+      return errorResponse(res, "Invalid role value. Please contact the administrator.", null, 500);
+    }
+    return errorResponse(res, "Invalid data value. Please contact the administrator.", null, 500);
   }
 
   // JWT errors

@@ -67,7 +67,7 @@ export class AdService {
       // This allows backward compatibility with ads that only have type set
       const slotToTypeMap: Record<string, string[]> = {
         HEADER: ["BANNER_TOP"],
-        TOP_BANNER: ["BANNER_TOP", "SLIDER_TOP"], // TOP_BANNER can be either banner or slider top
+        TOP_BANNER: ["BANNER_TOP", "SLIDER"], // TOP_BANNER can be either banner or slider
         SIDEBAR: ["BANNER_SIDE"],
         INLINE: ["INLINE"],
         FOOTER: ["FOOTER"],
@@ -190,8 +190,8 @@ export class AdService {
         }
       }
 
-      // For SLIDER and SLIDER_TOP types, return array; otherwise return single ad
-      if (selectedAd.type === "SLIDER" || selectedAd.type === "SLIDER_TOP") {
+      // For SLIDER type, return array; otherwise return single ad
+      if (selectedAd.type === "SLIDER") {
         // Return multiple ads for slider (up to limit)
         ads = matchingAds.slice(0, Number(limit));
         total = matchingAds.length;

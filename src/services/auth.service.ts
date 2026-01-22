@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { generateToken } from "@/utils/jwt";
 import { LoginInput, RegisterInput } from "@/validators/auth.validators";
 import { ROLE } from "@/types/enums";
+import { Role } from "@prisma/client";
 import { ga4Client } from "@/lib/ga4-client";
 import { emailService } from "./email.service";
 import { logger } from "@/utils/logger";
@@ -212,10 +213,22 @@ export class AuthService {
               slug: true,
             },
           },
+          prolocoAllowedCategories: {
+            select: {
+              id: true,
+              nameEn: true,
+              nameIt: true,
+              slug: true,
+            },
+          },
           socialPostingAllowed: true,
+          prolocoStatus: true,
+          prolocoCity: true,
+          prolocoName: true,
+          prolocoCode: true,
           createdAt: true,
           updatedAt: true,
-        },
+        } as any,
       });
     } catch (error: any) {
       // If _EditorCategories table doesn't exist, get user without categories
@@ -239,6 +252,9 @@ export class AuthService {
         // Add empty categories array to match expected structure
         if (user) {
           (user as any).allowedCategories = [];
+          (user as any).prolocoAllowedCategories = [];
+          // Explicitly access to mark as used
+          void (user as any).prolocoAllowedCategories;
         }
       } else {
         throw error;
@@ -448,5 +464,219 @@ export class AuthService {
     logger.info(`Password changed for user: ${user.email}`);
 
     return { message: "Password changed successfully" };
+  }
+
+  /**
+   * Register a new Pro Loco user (requires admin approval)
+   */
+  async registerProloco(data: any) {
+    try {
+      // Check if user exists
+      const existingUser = await prisma.user.findUnique({
+        where: { email: data.email },
+      });
+
+      if (existingUser) {
+        throw new Error("Email already registered");
+      }
+
+      // Check if proloco code already exists (if provided)
+      if (data.prolocoCode) {
+        const existingProloco = await prisma.user.findFirst({
+          where: { prolocoCode: data.prolocoCode } as any,
+        });
+        if (existingProloco) {
+          throw new Error("Pro Loco code already exists");
+        }
+      }
+    } catch (error: any) {
+      // If it's a Prisma schema error, provide helpful message
+      if (error instanceof Error && error.message?.includes("does not exist")) {
+        throw new Error("ProLoco features are not properly configured. Please contact the administrator.");
+      }
+      throw error;
+    }
+
+    try {
+      // Hash password
+      const hashedPassword = await bcrypt.hash(data.password, 10);
+
+      // Generate Pro Loco code if not provided
+      let prolocoCode = data.prolocoCode;
+      if (!prolocoCode) {
+        // Generate format: PL-YYYY-XXXX
+        const year = new Date().getFullYear();
+        const random = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+        prolocoCode = `PL-${year}-${random}`;
+        
+        // Ensure uniqueness
+        let isUnique = false;
+        let attempts = 0;
+        while (!isUnique && attempts < 10) {
+          try {
+            const exists = await prisma.user.findFirst({
+              where: { prolocoCode } as any,
+            });
+            if (!exists) {
+              isUnique = true;
+            } else {
+              const random = Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+              prolocoCode = `PL-${year}-${random}`;
+              attempts++;
+            }
+          } catch (error: any) {
+            if (error instanceof Error && error.message?.includes("does not exist")) {
+              throw new Error("ProLoco features are not properly configured. Please contact the administrator.");
+            }
+            throw error;
+          }
+        }
+      }
+
+      // Create Pro Loco user with PENDING status
+      const user = await prisma.user.create({
+        data: {
+          email: data.email,
+          password: hashedPassword,
+          name: data.name,
+          role: Role.PROLOCO,
+          isActive: true,
+          emailVerified: false,
+          // Pro Loco specific fields
+          prolocoCity: data.city,
+          prolocoName: data.prolocoName,
+          prolocoCode: prolocoCode,
+          prolocoPresident: data.president,
+          prolocoPresidentTel: data.presidentTel,
+          prolocoPresidentMail: data.presidentMail,
+          prolocoTel: data.tel,
+          prolocoWebsite: data.website || null,
+          prolocoStatus: "PENDING",
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          prolocoCity: true,
+          prolocoName: true,
+          prolocoCode: true,
+          prolocoStatus: true,
+          createdAt: true,
+        } as any,
+      });
+
+      // TODO: Send notification email to admin about new Pro Loco registration
+      logger.info(`Pro Loco registration request: ${user.email} (${prolocoCode})`);
+
+      return {
+        user,
+        message: "Registration request submitted. Please wait for admin approval.",
+      };
+    } catch (error: any) {
+      // If it's a Prisma schema error, provide helpful message
+      if (error instanceof Error && error.message?.includes("does not exist")) {
+        throw new Error("ProLoco features are not properly configured. Please contact the administrator.");
+      }
+      // Re-throw other errors
+      throw error;
+    }
+  }
+
+  /**
+   * Login Pro Loco user
+   */
+  async loginProloco(data: any) {
+    try {
+      // Find user by email or by city + prolocoCode
+      let user;
+      if (data.email) {
+        user = await prisma.user.findUnique({
+          where: { email: data.email },
+        });
+      } else if (data.city && data.prolocoCode) {
+        user = await prisma.user.findFirst({
+          where: {
+            prolocoCity: data.city,
+            prolocoCode: data.prolocoCode,
+            role: Role.PROLOCO,
+          } as any,
+        });
+      }
+
+      if (!user) {
+        throw new Error("Invalid credentials");
+      }
+
+      // Must be Pro Loco role
+      if (user.role !== Role.PROLOCO) {
+        throw new Error("Invalid credentials");
+      }
+
+      // Check active status
+      if (!user.isActive) {
+        throw new Error("Account is disabled. Please contact admin.");
+      }
+
+      // Check approval status
+      if ((user as any).prolocoStatus !== "APPROVED") {
+        throw new Error("Account pending approval. Please wait for admin approval.");
+      }
+
+      // Verify password
+      const isValidPassword = await bcrypt.compare(data.password, user.password);
+      if (!isValidPassword) {
+        throw new Error("Invalid credentials");
+      }
+
+      // Generate token
+      const token = generateToken({
+        id: user.id,
+        email: user.email,
+        role: user.role as unknown as ROLE,
+      });
+
+      // Get user with allowed categories
+      let userWithCategories;
+      try {
+        userWithCategories = await prisma.user.findUnique({
+          where: { id: user.id },
+          include: {
+            prolocoAllowedCategories: {
+              select: {
+                id: true,
+                nameEn: true,
+                nameIt: true,
+                slug: true,
+              },
+            },
+          } as any,
+        });
+      } catch (error: any) {
+        logger.warn("Error fetching Pro Loco categories:", error);
+        userWithCategories = await prisma.user.findUnique({
+          where: { id: user.id },
+        });
+        if (userWithCategories) {
+          (userWithCategories as any).prolocoAllowedCategories = [];
+        }
+      }
+
+      if (!userWithCategories) {
+        throw new Error("User not found");
+      }
+
+      // Return user info (excluding password)
+      const { password: _password, ...userWithoutPassword } = userWithCategories;
+
+      return { user: userWithoutPassword, token };
+    } catch (error: any) {
+      // If it's a Prisma schema error, provide helpful message
+      if (error instanceof Error && error.message?.includes("does not exist")) {
+        throw new Error("ProLoco features are not properly configured. Please contact the administrator.");
+      }
+      // Re-throw other errors (like invalid credentials, etc.)
+      throw error;
+    }
   }
 }

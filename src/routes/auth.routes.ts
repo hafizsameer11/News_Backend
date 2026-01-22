@@ -8,6 +8,8 @@ import {
   resendVerificationValidator,
   updateProfileValidator,
   changePasswordValidator,
+  prolocoRegisterValidator,
+  prolocoLoginValidator,
 } from "@/validators/auth.validators";
 import { asyncHandler } from "@/middleware/asyncHandler";
 import { authGuard } from "@/middleware/authGuard";
@@ -224,6 +226,32 @@ router.patch(
   authGuard(), // Any authenticated user
   validate(changePasswordValidator),
   asyncHandler(authController.changePassword)
+);
+
+/**
+ * @openapi
+ * /auth/proloco/register:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Register a new Pro Loco user (requires admin approval)
+ */
+router.post(
+  "/proloco/register",
+  validate(prolocoRegisterValidator),
+  asyncHandler(authController.registerProloco)
+);
+
+/**
+ * @openapi
+ * /auth/proloco/login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Login Pro Loco user
+ */
+router.post(
+  "/proloco/login",
+  validate(prolocoLoginValidator),
+  asyncHandler(authController.loginProloco)
 );
 
 export default router;

@@ -3,6 +3,7 @@ export enum ROLE {
   ADMIN = "ADMIN",
   EDITOR = "EDITOR",
   ADVERTISER = "ADVERTISER",
+  PROLOCO = "PROLOCO",
   USER = "USER",
 }
 

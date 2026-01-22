@@ -1,6 +1,7 @@
 import prisma from "@/config/prisma";
 import bcrypt from "bcryptjs";
 import { ROLE } from "@/types/enums";
+import { Role } from "@prisma/client";
 import { logger } from "@/utils/logger";
 
 export class UserService {
@@ -331,6 +332,199 @@ export class UserService {
         });
         if (!updatedUser) throw new Error("User not found");
         return { ...updatedUser, allowedCategories: [] };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get all Pro Loco users (pending, approved, rejected)
+   */
+  async getProlocoUsers(status?: string) {
+    try {
+      const where: any = { role: Role.PROLOCO };
+      if (status) {
+        where.prolocoStatus = status;
+      }
+
+      const users = await prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          prolocoCity: true,
+          prolocoName: true,
+          prolocoCode: true,
+          prolocoPresident: true,
+          prolocoPresidentTel: true,
+          prolocoPresidentMail: true,
+          prolocoTel: true,
+          prolocoWebsite: true,
+          prolocoStatus: true,
+          prolocoApprovedAt: true,
+          prolocoAllowedCategories: {
+            select: {
+              id: true,
+              nameEn: true,
+              nameIt: true,
+              slug: true,
+            },
+          },
+          createdAt: true,
+          updatedAt: true,
+        } as any,
+        orderBy: { createdAt: "desc" },
+      });
+
+      return users;
+    } catch (error: any) {
+      logger.error("Error fetching Pro Loco users:", error);
+      // If it's a schema error, provide helpful message
+      if (error instanceof Error && error.message?.includes("does not exist")) {
+        throw new Error("ProLoco features are not properly configured. Please contact the administrator.");
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Approve Pro Loco user and optionally assign categories
+   */
+  async approveProloco(userId: string, categoryIds: string[] = [], approvedBy: string) {
+    // Verify user exists and is Pro Loco
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error("User not found");
+    if (user.role !== Role.PROLOCO) throw new Error("User is not a Pro Loco user");
+
+    // Verify categories exist if provided
+    if (categoryIds.length > 0) {
+      const categories = await prisma.category.findMany({
+        where: { id: { in: categoryIds } },
+      });
+      if (categories.length !== categoryIds.length) {
+        throw new Error("Some categories not found");
+      }
+    }
+
+    // Update user status and assign categories
+    const updateData: any = {
+      prolocoStatus: "APPROVED",
+      prolocoApprovedAt: new Date(),
+      prolocoApprovedBy: approvedBy,
+      emailVerified: true, // Auto-verify email on approval
+    };
+
+    // Assign categories if provided
+    if (categoryIds.length > 0) {
+      updateData.prolocoAllowedCategories = {
+        set: categoryIds.map((id) => ({ id })),
+      };
+    }
+
+    try {
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+        include: {
+          prolocoAllowedCategories: {
+            select: {
+              id: true,
+              nameEn: true,
+              nameIt: true,
+              slug: true,
+            },
+          },
+        } as any,
+      });
+
+      // TODO: Send approval email to Pro Loco user
+      logger.info(`Pro Loco user approved: ${updatedUser.email} (${(updatedUser as any).prolocoCode})`);
+
+      const { password: _password, ...userWithoutPassword } = updatedUser;
+      return userWithoutPassword;
+    } catch (error: any) {
+      // Handle case where Pro Loco categories table doesn't exist
+      if (error.message?.includes("ProlocoCategories") || error.message?.includes("does not exist")) {
+        logger.warn("ProlocoCategories table not found, updating user without categories");
+        const { prolocoAllowedCategories: _prolocoAllowedCategories, ...updateDataWithoutCategories } = updateData;
+        const updatedUser = await prisma.user.update({
+          where: { id: userId },
+          data: updateDataWithoutCategories,
+        });
+        const { password: _password, ...userWithoutPassword } = updatedUser;
+        return { ...userWithoutPassword, prolocoAllowedCategories: [] };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Reject Pro Loco user
+   */
+  async rejectProloco(userId: string, rejectedBy: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error("User not found");
+    if (user.role !== Role.PROLOCO) throw new Error("User is not a Pro Loco user");
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        prolocoStatus: "REJECTED",
+        prolocoApprovedBy: rejectedBy,
+      } as any,
+    });
+
+    // TODO: Send rejection email to Pro Loco user
+    logger.info(`Pro Loco user rejected: ${updatedUser.email} (${(updatedUser as any).prolocoCode})`);
+
+    const { password: _password, ...userWithoutPassword } = updatedUser;
+    return userWithoutPassword;
+  }
+
+  /**
+   * Assign categories to Pro Loco user
+   */
+  async assignProlocoCategories(userId: string, categoryIds: string[]) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error("User not found");
+    if (user.role !== Role.PROLOCO) throw new Error("User is not a Pro Loco user");
+
+    // Verify categories exist
+    if (categoryIds.length > 0) {
+      const categories = await prisma.category.findMany({
+        where: { id: { in: categoryIds } },
+      });
+      if (categories.length !== categoryIds.length) {
+        throw new Error("Some categories not found");
+      }
+    }
+
+    try {
+      return await prisma.user.update({
+        where: { id: userId },
+        data: {
+          prolocoAllowedCategories: {
+            set: categoryIds.map((id) => ({ id })),
+          },
+        } as any,
+        include: {
+          prolocoAllowedCategories: {
+            select: {
+              id: true,
+              nameEn: true,
+              nameIt: true,
+              slug: true,
+            },
+          },
+        } as any,
+      });
+    } catch (error: any) {
+      if (error.message?.includes("ProlocoCategories") || error.message?.includes("does not exist")) {
+        const updatedUser = await prisma.user.findUnique({ where: { id: userId } });
+        if (!updatedUser) throw new Error("User not found");
+        return { ...updatedUser, prolocoAllowedCategories: [] };
       }
       throw error;
     }

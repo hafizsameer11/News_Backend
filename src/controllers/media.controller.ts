@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { MediaService } from "@/services/media.service";
 import { successResponse, errorResponse } from "@/utils/response";
+import { logger } from "@/utils/logger";
 import fs from "fs";
 import path from "path";
 
@@ -8,35 +9,53 @@ const mediaService = new MediaService();
 
 export const mediaController = {
   upload: async (req: Request, res: Response) => {
-    if (!req.file) {
-      return errorResponse(res, "No file uploaded", null, 400);
+    try {
+      if (!req.file) {
+        logger.warn("Media upload attempted without file");
+        return errorResponse(res, "No file uploaded", null, 400);
+      }
+
+      logger.info(`Media upload started: ${req.file.originalname} (${req.file.size} bytes)`);
+
+      // Verify file was actually saved to disk
+      const filePath = req.file.path || path.join(req.file.destination || "uploads", req.file.filename);
+      const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath);
+      
+      if (!fs.existsSync(absoluteFilePath)) {
+        logger.error(`File was not saved to disk: ${absoluteFilePath}`);
+        return errorResponse(res, "File was not saved to disk", { path: absoluteFilePath }, 500);
+      }
+
+      const { caption, newsId } = req.body;
+      const uploaderId = (req as any).user?.id; // Get user ID from authenticated request
+      const uploaderRole = (req as any).user?.role; // Get user role from authenticated request
+      
+      logger.info(`Saving media to database: ${req.file.filename}`);
+      const result = await mediaService.saveMedia(
+        req.file,
+        caption,
+        newsId,
+        uploaderId,
+        uploaderRole
+      );
+
+      // Verify file still exists after saving to database
+      if (!fs.existsSync(absoluteFilePath)) {
+        logger.error(`File was deleted after upload: ${absoluteFilePath}`);
+        return errorResponse(res, "File was deleted after upload", { path: absoluteFilePath }, 500);
+      }
+
+      logger.info(`Media upload successful: ${result.id}`);
+      return successResponse(res, "File uploaded successfully", result, 201);
+    } catch (error) {
+      logger.error("Media upload error:", error);
+      return errorResponse(
+        res,
+        error instanceof Error ? error.message : "Failed to upload file",
+        null,
+        500
+      );
     }
-
-    // Verify file was actually saved to disk
-    const filePath = req.file.path || path.join(req.file.destination || "uploads", req.file.filename);
-    const absoluteFilePath = path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath);
-    
-    if (!fs.existsSync(absoluteFilePath)) {
-      return errorResponse(res, "File was not saved to disk", { path: absoluteFilePath }, 500);
-    }
-
-    const { caption, newsId } = req.body;
-    const uploaderId = (req as any).user?.id; // Get user ID from authenticated request
-    const uploaderRole = (req as any).user?.role; // Get user role from authenticated request
-    const result = await mediaService.saveMedia(
-      req.file,
-      caption,
-      newsId,
-      uploaderId,
-      uploaderRole
-    );
-
-    // Verify file still exists after saving to database
-    if (!fs.existsSync(absoluteFilePath)) {
-      return errorResponse(res, "File was deleted after upload", { path: absoluteFilePath }, 500);
-    }
-
-    return successResponse(res, "File uploaded successfully", result, 201);
   },
 
   getAll: async (req: Request, res: Response) => {

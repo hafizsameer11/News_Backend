@@ -54,4 +54,14 @@ export const authController = {
     const result = await authService.changePassword(req.user.id, currentPassword, newPassword);
     return successResponse(res, result.message, result);
   },
+
+  registerProloco: async (req: Request, res: Response) => {
+    const result = await authService.registerProloco(req.body);
+    return successResponse(res, result.message, result, 201);
+  },
+
+  loginProloco: async (req: Request, res: Response) => {
+    const result = await authService.loginProloco(req.body);
+    return successResponse(res, "Login successful", result);
+  },
 };

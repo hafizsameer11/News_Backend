@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
@@ -17,6 +17,7 @@ enum Role {
   ADMIN
   EDITOR
   ADVERTISER
+  PROLOCO
   USER // Regular registered user (optional)
 }
 
@@ -76,6 +77,13 @@ enum EmailQueueStatus {
   FAILED
 }
 
+enum MemoType {
+  NOTE
+  REMINDER
+  TASK
+  FOLLOW_UP
+}
+
 // --------------------------------------
 // User & Auth Models
 // --------------------------------------
@@ -90,13 +98,13 @@ model User {
   isActive Boolean @default(true)
 
   // Password reset
-  passwordResetToken    String?
-  passwordResetExpires  DateTime?
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
 
   // Email verification
-  emailVerified              Boolean   @default(false)
-  emailVerificationToken     String?
-  emailVerificationExpires   DateTime?
+  emailVerified            Boolean   @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
 
   // Editor specific
   allowedCategories    Category[] @relation("EditorCategories")
@@ -107,6 +115,20 @@ model User {
   ads          Ad[]
   transactions Transaction[]
 
+  // Pro Loco specific
+  prolocoCity              String?
+  prolocoName              String? // Pro Loco organization name
+  prolocoCode              String? // Unique code like PL-XXXX
+  prolocoPresident         String? // President name
+  prolocoPresidentTel      String?
+  prolocoPresidentMail     String?
+  prolocoTel               String?
+  prolocoWebsite           String?
+  prolocoStatus            String? // PENDING, APPROVED, REJECTED
+  prolocoApprovedAt        DateTime?
+  prolocoApprovedBy        String? // Admin user ID who approved
+  prolocoAllowedCategories Category[] @relation("ProlocoCategories")
+
   // Relations
   newsAuthored     News[]     @relation("NewsAuthor")
   reports          Report[]
@@ -115,6 +137,8 @@ model User {
   receivedMessages Chat[]     @relation("ChatReceiver")
   bookmarks        Bookmark[]
   uploadedMedia    Media[]    @relation("MediaUploader")
+  memos            Memo[]     @relation("MemoUser")
+  createdMemos     Memo[]     @relation("MemoCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -154,8 +178,9 @@ model Category {
   children    Category[] @relation("CategoryHierarchy")
 
   // Relations
-  news    News[]
-  editors User[] @relation("EditorCategories")
+  news         News[]
+  editors      User[] @relation("EditorCategories")
+  prolocoUsers User[] @relation("ProlocoCategories")
 
   order     Int      @default(0)
   createdAt DateTime @default(now())
@@ -204,7 +229,7 @@ model News {
   breakingNewsAlerts BreakingNewsAlert[]
 
   // Stats
-  views Int @default(0)
+  views    Int           @default(0)
   viewLogs NewsViewLog[]
 
   // Bookmarks
@@ -230,14 +255,14 @@ model Media {
   uploader   User?   @relation("MediaUploader", fields: [uploaderId], references: [id])
 
   // Video metadata (optional, only for VIDEO type)
-  duration         Int?              // Duration in seconds
-  width            Int?              // Width in pixels
-  height           Int?              // Height in pixels
-  fileSize         BigInt?           // File size in bytes
-  thumbnailUrl     String?           // Thumbnail image URL
+  duration         Int? // Duration in seconds
+  width            Int? // Width in pixels
+  height           Int? // Height in pixels
+  fileSize         BigInt? // File size in bytes
+  thumbnailUrl     String? // Thumbnail image URL
   processingStatus ProcessingStatus? @default(PENDING)
-  codec            String?           // Video codec (e.g., "h264", "vp9")
-  bitrate          Int?              // Bitrate in kbps
+  codec            String? // Video codec (e.g., "h264", "vp9")
+  bitrate          Int? // Bitrate in kbps
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -262,13 +287,13 @@ model SocialPostLog {
 // --------------------------------------
 
 model WeatherCity {
-  id       String  @id @default(uuid())
-  name     String  @unique
-  apiId    String? // OpenWeatherMap ID
-  latitude Float?  // Latitude coordinate
+  id        String  @id @default(uuid())
+  name      String  @unique
+  apiId     String? // OpenWeatherMap ID
+  latitude  Float? // Latitude coordinate
   longitude Float? // Longitude coordinate
-  isActive Boolean @default(true)
-  order    Int     @default(0)
+  isActive  Boolean @default(true)
+  order     Int     @default(0)
 
   // Relations
   weatherCache WeatherCache?
@@ -280,16 +305,16 @@ model WeatherCity {
 }
 
 model WeatherCache {
-  id        String   @id @default(uuid())
-  cityId    String   @unique
-  city      WeatherCity @relation(fields: [cityId], references: [id], onDelete: Cascade)
-  cityName  String
-  temperature Decimal @db.Decimal(5, 2)
-  condition String
-  humidity  Int
-  windSpeed Decimal @db.Decimal(5, 2)
-  data      String   @db.Text // JSON string for full API response
-  updatedAt DateTime @default(now()) @updatedAt
+  id          String      @id @default(uuid())
+  cityId      String      @unique
+  city        WeatherCity @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  cityName    String
+  temperature Decimal     @db.Decimal(5, 2)
+  condition   String
+  humidity    Int
+  windSpeed   Decimal     @db.Decimal(5, 2)
+  data        String      @db.Text // JSON string for full API response
+  updatedAt   DateTime    @default(now()) @updatedAt
 
   @@index([cityId])
   @@index([updatedAt])
@@ -439,9 +464,9 @@ model HomepageSection {
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
 
-  @@map("homepage_sections")
   @@index([order])
   @@index([isActive])
+  @@map("homepage_sections")
 }
 
 model Bookmark {
@@ -453,19 +478,19 @@ model Bookmark {
   createdAt DateTime @default(now())
 
   @@unique([userId, newsId])
-  @@map("bookmarks")
   @@index([userId])
   @@index([newsId])
+  @@map("bookmarks")
 }
 
 model AuditLog {
-  id        String  @id @default(uuid())
-  action    String
-  details   String? @db.Text
-  ipAddress String?
-  method    String? // HTTP method (GET, POST, PATCH, DELETE)
-  endpoint  String? // API endpoint
-  userAgent String? // User agent string
+  id             String  @id @default(uuid())
+  action         String
+  details        String? @db.Text
+  ipAddress      String?
+  method         String? // HTTP method (GET, POST, PATCH, DELETE)
+  endpoint       String? // API endpoint
+  userAgent      String? // User agent string
   responseStatus Int? // HTTP response status code
 
   userId String?
@@ -508,17 +533,17 @@ model Chat {
 // --------------------------------------
 
 model EmailQueue {
-  id          String           @id @default(uuid())
-  to          String
-  subject     String
-  html        String           @db.Text
-  text        String?          @db.Text
-  status      EmailQueueStatus @default(PENDING)
-  retryCount  Int              @default(0)
-  errorMessage String?         @db.Text
-  sentAt      DateTime?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id           String           @id @default(uuid())
+  to           String
+  subject      String
+  html         String           @db.Text
+  text         String?          @db.Text
+  status       EmailQueueStatus @default(PENDING)
+  retryCount   Int              @default(0)
+  errorMessage String?          @db.Text
+  sentAt       DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   @@index([status])
   @@index([createdAt])
@@ -526,11 +551,11 @@ model EmailQueue {
 }
 
 model BreakingNewsAlert {
-  id            String   @id @default(uuid())
-  newsId        String
-  news          News     @relation(fields: [newsId], references: [id], onDelete: Cascade)
-  sentAt        DateTime @default(now())
-  recipientCount Int     @default(0)
+  id             String   @id @default(uuid())
+  newsId         String
+  news           News     @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  sentAt         DateTime @default(now())
+  recipientCount Int      @default(0)
 
   @@unique([newsId])
   @@index([sentAt])
@@ -544,7 +569,7 @@ model BreakingNewsAlert {
 model UserBehaviorEvent {
   id        String  @id @default(uuid())
   userId    String? // Optional - can track anonymous users
-  eventType String  // PAGE_VIEW, SEARCH, CLICK, SUBSCRIBE, etc.
+  eventType String // PAGE_VIEW, SEARCH, CLICK, SUBSCRIBE, etc.
   eventData String? @db.Text // JSON string for event-specific data
   ipAddress String?
   userAgent String?
@@ -558,9 +583,9 @@ model UserBehaviorEvent {
 }
 
 model NewsViewLog {
-  id        String  @id @default(uuid())
+  id        String   @id @default(uuid())
   newsId    String
-  news      News    @relation(fields: [newsId], references: [id], onDelete: Cascade)
+  news      News     @relation(fields: [newsId], references: [id], onDelete: Cascade)
   userId    String? // Optional - can track anonymous views
   ipAddress String?
   userAgent String?
@@ -570,4 +595,26 @@ model NewsViewLog {
   @@index([userId])
   @@index([viewedAt])
   @@map("news_view_logs")
+}
+
+// --------------------------------------
+// Memo System
+// --------------------------------------
+
+model Memo {
+  id          String   @id @default(uuid())
+  type        MemoType
+  message     String   @db.Text
+  when        Int      @default(0) // Timestamp or relative time
+  userId      String
+  user        User     @relation("MemoUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User     @relation("MemoCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([createdById])
+  @@index([createdAt])
+  @@map("memos")
 }

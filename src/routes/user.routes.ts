@@ -16,6 +16,13 @@ const router = Router();
 router.use(authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN]));
 
 router.get("/", asyncHandler(userController.getAll));
+
+// Pro Loco management routes (must come before /:id to avoid route conflicts)
+router.get("/proloco", asyncHandler(userController.getProlocoUsers));
+router.post("/proloco/approve", asyncHandler(userController.approveProloco));
+router.post("/proloco/reject", asyncHandler(userController.rejectProloco));
+router.post("/proloco/:id/categories", asyncHandler(userController.assignProlocoCategories));
+
 router.get("/:id", asyncHandler(userController.getOne));
 
 router.post("/", validate(createUserValidator), asyncHandler(userController.create));

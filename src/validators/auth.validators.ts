@@ -53,9 +53,49 @@ export const changePasswordValidator = z.object({
   }),
 });
 
+// Pro Loco registration validator
+export const prolocoRegisterValidator = z.object({
+  body: z.object({
+    email: z.string().email("Invalid email format"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    name: z.string().min(2, "Name must be at least 2 characters"),
+    city: z.string().min(2, "City is required"),
+    prolocoName: z.string().min(2, "Pro Loco name is required"),
+    prolocoCode: z.string().optional(), // Optional for initial registration
+    president: z.string().min(2, "President name is required"),
+    presidentTel: z.string().min(6, "President phone is required"),
+    presidentMail: z.string().email("Invalid president email format"),
+    refMail: z.string().email("Invalid reference email format"),
+    tel: z.string().min(6, "Pro Loco phone is required"),
+    website: z.string().url("Invalid website URL").optional().or(z.literal("")),
+    note: z.string().optional(),
+  }),
+});
+
+// Pro Loco login validator
+export const prolocoLoginValidator = z.object({
+  body: z.object({
+    email: z.string().email("Invalid email format").optional(),
+    city: z.string().optional(),
+    prolocoCode: z.string().optional(),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+  }),
+});
+
+// Admin approve Pro Loco validator
+export const approveProlocoValidator = z.object({
+  body: z.object({
+    userId: z.string().uuid("Invalid user ID"),
+    categoryIds: z.array(z.string().uuid()).optional(), // Categories to assign
+  }),
+});
+
 // Export types
 export type LoginInput = z.infer<typeof loginValidator>["body"];
 export type RegisterInput = z.infer<typeof registerValidator>["body"];
 export type VerifyEmailInput = z.infer<typeof verifyEmailValidator>["body"];
 export type UpdateProfileInput = z.infer<typeof updateProfileValidator>["body"];
 export type ChangePasswordInput = z.infer<typeof changePasswordValidator>["body"];
+export type ProlocoRegisterInput = z.infer<typeof prolocoRegisterValidator>["body"];
+export type ProlocoLoginInput = z.infer<typeof prolocoLoginValidator>["body"];
+export type ApproveProlocoInput = z.infer<typeof approveProlocoValidator>["body"];
