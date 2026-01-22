@@ -3,7 +3,7 @@ import { NEWS_STATUS } from "@/types/enums";
 
 export const createNewsValidator = z.object({
   body: z.object({
-    title: z.string().min(5, "Title is required"),
+    title: z.string().min(5, "Title must be at least 5 characters").max(500, "Title must not exceed 500 characters"),
     slug: z
       .string()
       .min(5)
@@ -27,7 +27,7 @@ export const updateNewsValidator = z.object({
     id: z.string().uuid(),
   }),
   body: z.object({
-    title: z.string().min(5).optional(),
+    title: z.string().min(5, "Title must be at least 5 characters").max(500, "Title must not exceed 500 characters").optional(),
     slug: z
       .string()
       .min(5)

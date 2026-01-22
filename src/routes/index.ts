@@ -30,6 +30,7 @@ import memoRoutes from "./memo.routes";
 import homepageRoutes from "./homepage.routes";
 import bookmarkRoutes from "./bookmark.routes";
 import configRoutes from "./config.routes";
+import crmRoutes from "./crm.routes";
 import { PasswordService } from "@/services/password.service";
 import { validate } from "@/middleware/validate";
 import { forgotPasswordValidator, resetPasswordValidator } from "@/validators/password.validators";
@@ -220,5 +221,6 @@ router.use("/memo", memoRoutes);
 router.use("/homepage", homepageRoutes);
 router.use("/bookmarks", bookmarkRoutes);
 router.use("/config", configRoutes); // Public config (no auth required)
+router.use("/crm", crmRoutes); // CRM endpoints for external systems
 
 export default router;

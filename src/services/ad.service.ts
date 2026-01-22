@@ -67,7 +67,7 @@ export class AdService {
       // This allows backward compatibility with ads that only have type set
       const slotToTypeMap: Record<string, string[]> = {
         HEADER: ["BANNER_TOP"],
-        TOP_BANNER: ["BANNER_TOP", "SLIDER"], // TOP_BANNER can be either banner or slider
+        TOP_BANNER: ["BANNER_TOP", "SLIDER", "SLIDER_TOP"], // TOP_BANNER can be banner, slider, or slider top
         SIDEBAR: ["BANNER_SIDE"],
         INLINE: ["INLINE"],
         FOOTER: ["FOOTER"],
@@ -190,8 +190,8 @@ export class AdService {
         }
       }
 
-      // For SLIDER type, return array; otherwise return single ad
-      if (selectedAd.type === "SLIDER") {
+      // For SLIDER or SLIDER_TOP type, return array; otherwise return single ad
+      if (selectedAd.type === "SLIDER" || selectedAd.type === "SLIDER_TOP") {
         // Return multiple ads for slider (up to limit)
         ads = matchingAds.slice(0, Number(limit));
         total = matchingAds.length;
@@ -283,7 +283,9 @@ export class AdService {
     if (data.price !== undefined && data.price !== null && data.price !== "") {
       // Handle both string and number inputs
       if (typeof data.price === "string") {
-        priceValue = parseFloat(data.price);
+        // Remove any currency symbols, commas, or spaces
+        const cleanedPrice = data.price.replace(/[€$£,\s]/g, "").trim();
+        priceValue = parseFloat(cleanedPrice);
       } else if (typeof data.price === "number") {
         priceValue = data.price;
       } else {
@@ -293,8 +295,8 @@ export class AdService {
       priceValue = calculateAdPrice(data.type, start, end);
     }
 
-    // Validate price is a valid number
-    if (isNaN(priceValue) || priceValue < 0) {
+    // Validate price is a valid number (for both provided and calculated prices)
+    if (isNaN(priceValue) || priceValue < 0 || !isFinite(priceValue)) {
       throw new Error("Price must be a valid positive number");
     }
 
@@ -412,11 +414,18 @@ export class AdService {
 
     // Handle price conversion - Decimal(10, 2) can store up to 99,999,999.99
     if (priceWasProvided) {
-      // Convert to number if it's a string
-      const priceValue = typeof updateData.price === "string" ? parseFloat(updateData.price) : updateData.price;
+      // Convert to number if it's a string, removing any currency symbols
+      let priceValue: number;
+      if (typeof updateData.price === "string") {
+        // Remove any currency symbols, commas, or spaces
+        const cleanedPrice = updateData.price.replace(/[€$£,\s]/g, "").trim();
+        priceValue = parseFloat(cleanedPrice);
+      } else {
+        priceValue = updateData.price;
+      }
       
       // Validate price is a valid number
-      if (isNaN(priceValue) || priceValue < 0) {
+      if (isNaN(priceValue) || priceValue < 0 || !isFinite(priceValue)) {
         throw new Error("Price must be a valid positive number");
       }
 
@@ -426,8 +435,11 @@ export class AdService {
         throw new Error(`Price cannot exceed ${MAX_PRICE.toLocaleString()}`);
       }
 
-      // Round to 2 decimal places and convert to Decimal type
-      processedPrice = new Prisma.Decimal(Math.round(priceValue * 100) / 100);
+      // Round to 2 decimal places to avoid precision issues
+      priceValue = Math.round(priceValue * 100) / 100;
+
+      // Convert to Decimal type (priceValue is already rounded)
+      processedPrice = new Prisma.Decimal(priceValue);
     }
 
     // Handle date conversions if dates are being updated
@@ -436,10 +448,12 @@ export class AdService {
     
     if (updateData.startDate) {
       updateData.startDate = new Date(updateData.startDate);
-      // Prevent past dates
-      if (updateData.startDate < now) {
+      // Only prevent past dates for new ads or if ad is still PENDING
+      // Allow updating dates for ACTIVE ads (for extending campaigns, etc.)
+      if (ad.status === "PENDING" && updateData.startDate < now) {
         throw new Error("Start date cannot be in the past");
       }
+      // For ACTIVE/PAUSED ads, allow past dates if they're just adjusting the schedule
     }
 
     if (updateData.endDate) {
@@ -486,6 +500,16 @@ export class AdService {
     return await prisma.ad.update({
       where: { id },
       data: updateData,
+      include: {
+        advertiser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            companyName: true,
+          },
+        },
+      },
     });
   }
 

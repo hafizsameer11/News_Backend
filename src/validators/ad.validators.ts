@@ -75,7 +75,7 @@ export const createAdValidator = z
   .object({
     body: z
       .object({
-        title: z.string().min(1, "Title is required"),
+        title: z.string().min(1, "Title is required").max(255, "Title must not exceed 255 characters"),
         name: z.string().optional(), // Optional display name for easier identification
         type: AdTypeEnum,
         imageUrl: z
@@ -137,7 +137,7 @@ export const updateAdValidator = z
     }),
     body: z
       .object({
-        title: z.string().min(1, "Title is required").optional(),
+        title: z.string().min(1, "Title is required").max(255, "Title must not exceed 255 characters").optional(),
         name: z.string().optional(), // Optional display name for easier identification
         type: AdTypeEnum.optional(),
         imageUrl: z
@@ -146,10 +146,13 @@ export const updateAdValidator = z
           .max(2048, "Image URL is too long (max 2048 characters)")
           .optional(),
         targetLink: z
-          .string()
-          .url("Invalid target link URL")
-          .max(2048, "Target link URL is too long (max 2048 characters)")
-          .optional(),
+          .union([
+            z.string().url("Invalid target link URL").max(2048, "Target link URL is too long (max 2048 characters)"),
+            z.literal(""),
+            z.null(),
+          ])
+          .optional()
+          .transform((val) => (val === "" || val === null ? undefined : val)),
         position: PositionEnum.optional(),
         status: AdStatusEnum.optional(),
         startDate: z.string().datetime("Invalid start date format").optional(),

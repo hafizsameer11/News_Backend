@@ -44,7 +44,7 @@ const router = Router();
  *         name: type
  *         schema:
  *           type: string
- *           enum: [BANNER_TOP, BANNER_SIDE, INLINE, FOOTER, SLIDER, TICKER, POPUP, STICKY]
+ *           enum: [BANNER_TOP, BANNER_SIDE, INLINE, FOOTER, SLIDER, SLIDER_TOP, TICKER, POPUP, STICKY]
  *         description: Filter by ad type
  *       - in: query
  *         name: slot
@@ -61,6 +61,8 @@ const router = Router();
  */
 // GET /ads - Public endpoint but extracts user if token is provided
 // This allows admins to see all ads while public users see only active ads
+// IMPORTANT: This route must be defined BEFORE any routes with path parameters (like /:id)
+// to ensure it matches /ads before /ads/:id routes
 router.get("/", optionalAuth(), asyncHandler(adController.getAll));
 
 /**

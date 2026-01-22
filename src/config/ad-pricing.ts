@@ -16,6 +16,7 @@ export const AD_PRICING_RATES: AdPricingRates = {
   INLINE: 15,
   FOOTER: 20,
   SLIDER: 30,
+  SLIDER_TOP: 50, // Same as BANNER_TOP since it's a prominent homepage hero position
   TICKER: 10,
   POPUP: 40,
   STICKY: 35,

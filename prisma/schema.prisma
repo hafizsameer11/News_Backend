@@ -53,6 +53,7 @@ enum AdType {
   INLINE
   FOOTER
   SLIDER
+  SLIDER_TOP
   TICKER
   POPUP
   STICKY
@@ -191,7 +192,7 @@ model Category {
 
 model News {
   id      String @id @default(uuid())
-  title   String
+  title   String @db.VarChar(500) // Increased from default VARCHAR(255) to support longer titles
   slug    String @unique
   summary String @db.Text
   content String @db.LongText
@@ -355,11 +356,11 @@ model Transport {
 // --------------------------------------
 
 model Ad {
-  id         String @id @default(uuid())
+  id         String  @id @default(uuid())
   title      String
   type       AdType
-  imageUrl   String @db.VarChar(2048)
-  targetLink String @db.VarChar(2048)
+  imageUrl   String  @db.VarChar(2048)
+  targetLink String? @db.VarChar(2048)
 
   // Placement
   position String? // Specific zone code

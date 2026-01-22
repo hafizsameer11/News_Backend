@@ -44,9 +44,6 @@ const router = Router();
  */
 router.get("/", asyncHandler(newsController.getAll));
 
-// Protected Routes (Admin, Editor, Super Admin)
-router.use(authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR]));
-
 /**
  * @openapi
  * /news/export:
@@ -64,14 +61,16 @@ router.use(authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR]));
  *               type: string
  *               format: binary
  */
-router.get("/export", asyncHandler(newsController.export));
+// Protected export endpoint - must be before /:idOrSlug to avoid route conflicts
+router.get("/export", authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR]), asyncHandler(newsController.export));
 
 /**
  * @openapi
  * /news/{idOrSlug}:
  *   get:
  *     tags: [News]
- *     summary: Get news by ID or Slug
+ *     summary: Get news by ID or Slug (Public)
+ *     description: Public endpoint to view news articles by ID or slug. No authentication required.
  *     parameters:
  *       - in: path
  *         name: idOrSlug
@@ -81,8 +80,13 @@ router.get("/export", asyncHandler(newsController.export));
  *     responses:
  *       200:
  *         description: News details
+ *       404:
+ *         description: News article not found
  */
 router.get("/:idOrSlug", asyncHandler(newsController.getOne));
+
+// Protected Routes (Admin, Editor, Super Admin) - for all other protected endpoints
+router.use(authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR]));
 
 /**
  * @openapi
