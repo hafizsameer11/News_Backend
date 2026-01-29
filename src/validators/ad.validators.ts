@@ -23,8 +23,13 @@ const POSITION_VALUES = [
   "SIDEBAR",
   "SIDEBAR_RECT",
   "INLINE_ARTICLE",
+  "MID_PAGE",
+  "BETWEEN_SECTIONS_1",
+  "BETWEEN_SECTIONS_2",
+  "BETWEEN_SECTIONS_3",
   "FOOTER",
   "MOBILE",
+  "BODY",
 ] as const;
 
 const PositionEnum = z.enum(POSITION_VALUES as any);

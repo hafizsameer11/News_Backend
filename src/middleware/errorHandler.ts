@@ -11,24 +11,24 @@ import { Prisma } from "@prisma/client";
 export const errorHandler = (err: Error, req: Request, res: Response, _next: NextFunction) => {
   logger.error("Error:", err);
 
-  // Set most permissive Referrer-Policy
-  res.setHeader("Referrer-Policy", "unsafe-url");
-  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-
-  // Ensure CORS headers are set even on error responses
-  const origin = req.headers.origin;
-  if (origin) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+  // Always set CORS on error responses so the client receives the body (allow requests from any origin)
+  if (!res.headersSent) {
+    res.setHeader("Referrer-Policy", "unsafe-url");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    }
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
+    );
+    res.setHeader("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
   }
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
-  );
-  res.setHeader("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
 
   // Zod validation errors
   if (err instanceof ZodError) {
@@ -47,9 +47,13 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
     if (err.message?.includes("does not exist")) {
       return errorResponse(res, "Database schema error. Please contact the administrator.", null, 500);
     }
-    // Check for data truncation errors (e.g., enum values not matching)
+    // Check for data truncation errors (e.g., enum values not matching, VARCHAR overflow)
     if (err.message?.includes("Data truncated") || err.message?.includes("code: 1265")) {
       return errorResponse(res, "Invalid data value. Please contact the administrator.", null, 500);
+    }
+    // Check for MySQL VARCHAR overflow errors (P2000 or specific error messages)
+    if (err.code === "P2000" || err.message?.includes("value too long") || err.message?.includes("string data, right truncated")) {
+      return errorResponse(res, "Data value is too long for the specified field.", null, 400);
     }
     return errorResponse(res, "Database error", err.message, 500);
   }
@@ -67,12 +71,9 @@ export const errorHandler = (err: Error, req: Request, res: Response, _next: Nex
     return errorResponse(res, "Invalid data value. Please contact the administrator.", null, 500);
   }
   
-  // Check for MySQL data truncation errors
-  if (err.message?.includes("Data truncated") || err.message?.includes("code: 1265") || err.message?.includes("ConnectorError")) {
-    if (err.message?.includes("role")) {
-      return errorResponse(res, "Invalid role value. Please contact the administrator.", null, 500);
-    }
-    return errorResponse(res, "Invalid data value. Please contact the administrator.", null, 500);
+  // Check for MySQL VARCHAR overflow errors
+  if (err.message?.includes("value too long") || err.message?.includes("string data, right truncated") || err.message?.includes("ER_DATA_TOO_LONG")) {
+    return errorResponse(res, "Data value is too long for the specified field.", null, 400);
   }
 
   // JWT errors

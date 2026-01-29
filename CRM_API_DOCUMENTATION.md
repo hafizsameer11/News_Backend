@@ -1,5 +1,13 @@
 # CRM API Documentation
 
+## Table of Contents
+1. [User Registration](#1-user-registration)
+2. [Get Categories](#2-get-categories)
+3. [Create News](#3-create-news)
+4. [Create Ad](#4-create-ad)
+5. [Get All News Statistics](#5-get-all-news-statistics)
+6. [Get User News Statistics](#6-get-user-news-statistics)
+
 This document describes the CRM API endpoints for managing users, news, and ads from external systems (like a CRM platform).
 
 ## Base URL
@@ -410,6 +418,286 @@ Content-Type: application/json
 
 ---
 
+### 5. Get All News Statistics
+
+Get comprehensive aggregate statistics about all news articles in the system.
+
+**Endpoint:** `GET /crm/news/stats`
+
+**Required Role:** `ADMIN`, `SUPER_ADMIN`, `EDITOR`, or `ADVERTISER`
+
+**Request Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Query Parameters:** None
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "News statistics retrieved successfully",
+  "data": {
+    "overview": {
+      "total": 1250,
+      "published": 1100,
+      "draft": 50,
+      "pending": 80,
+      "rejected": 20,
+      "featured": 45,
+      "breaking": 12
+    },
+    "views": {
+      "total": 125000,
+      "average": 113,
+      "last7Days": 8500,
+      "last30Days": 32000
+    },
+    "recentActivity": {
+      "newsLast7Days": 25,
+      "newsLast30Days": 95
+    },
+    "topNews": [
+      {
+        "id": "770e8400-e29b-41d4-a716-446655440000",
+        "title": "Breaking News: Major Event Happens",
+        "slug": "breaking-news-major-event",
+        "views": 5420,
+        "publishedAt": "2024-01-15T10:30:00.000Z",
+        "category": {
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "nameEn": "Politics",
+          "nameIt": "Politica"
+        },
+        "author": {
+          "id": "880e8400-e29b-41d4-a716-446655440000",
+          "name": "John Doe"
+        }
+      },
+      {
+        "id": "880e8400-e29b-41d4-a716-446655440001",
+        "title": "Sports Update: Championship Results",
+        "slug": "sports-update-championship-results",
+        "views": 4320,
+        "publishedAt": "2024-01-14T15:20:00.000Z",
+        "category": {
+          "id": "660e8400-e29b-41d4-a716-446655440001",
+          "nameEn": "Sports",
+          "nameIt": "Sport"
+        },
+        "author": {
+          "id": "880e8400-e29b-41d4-a716-446655440000",
+          "name": "John Doe"
+        }
+      }
+    ],
+    "categoryBreakdown": [
+      {
+        "categoryId": "550e8400-e29b-41d4-a716-446655440000",
+        "category": {
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "nameEn": "Politics",
+          "nameIt": "Politica",
+          "slug": "politics"
+        },
+        "newsCount": 350,
+        "totalViews": 45000
+      },
+      {
+        "categoryId": "660e8400-e29b-41d4-a716-446655440001",
+        "category": {
+          "id": "660e8400-e29b-41d4-a716-446655440001",
+          "nameEn": "Sports",
+          "nameIt": "Sport",
+          "slug": "sports"
+        },
+        "newsCount": 280,
+        "totalViews": 38000
+      }
+    ]
+  }
+}
+```
+
+**Response Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| overview.total | number | Total number of news articles |
+| overview.published | number | Number of published news |
+| overview.draft | number | Number of draft news |
+| overview.pending | number | Number of pending review news |
+| overview.rejected | number | Number of rejected news |
+| overview.featured | number | Number of featured news |
+| overview.breaking | number | Number of breaking news |
+| views.total | number | Total views across all news |
+| views.average | number | Average views per published article |
+| views.last7Days | number | Total views in last 7 days |
+| views.last30Days | number | Total views in last 30 days |
+| recentActivity.newsLast7Days | number | News created in last 7 days |
+| recentActivity.newsLast30Days | number | News created in last 30 days |
+| topNews | array | Top 10 performing news by views |
+| categoryBreakdown | array | Statistics grouped by category |
+
+**Error Response (401):**
+```json
+{
+  "success": false,
+  "message": "Unauthorized",
+  "data": null
+}
+```
+
+---
+
+### 6. Get User News Statistics
+
+Get statistics about news articles created by a specific user. If `userId` is not provided in the URL, returns stats for the authenticated user.
+
+**Endpoint:** `GET /crm/news/stats/user/:userId?`
+
+**Required Role:** `ADMIN`, `SUPER_ADMIN`, `EDITOR`, or `ADVERTISER`
+
+**Request Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**URL Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| userId | string (UUID) | No | User ID. If omitted, uses authenticated user's ID |
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "User news statistics retrieved successfully",
+  "data": {
+    "user": {
+      "id": "880e8400-e29b-41d4-a716-446655440000",
+      "name": "John Doe",
+      "email": "editor@example.com"
+    },
+    "overview": {
+      "total": 45,
+      "published": 38,
+      "draft": 5,
+      "pending": 2,
+      "rejected": 0,
+      "featured": 3,
+      "breaking": 1
+    },
+    "views": {
+      "total": 12500,
+      "average": 329
+    },
+    "recentActivity": {
+      "newsLast7Days": 3,
+      "newsLast30Days": 12
+    },
+    "topNews": [
+      {
+        "id": "770e8400-e29b-41d4-a716-446655440000",
+        "title": "Breaking News: Major Event Happens",
+        "slug": "breaking-news-major-event",
+        "views": 5420,
+        "publishedAt": "2024-01-15T10:30:00.000Z",
+        "category": {
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "nameEn": "Politics",
+          "nameIt": "Politica"
+        }
+      },
+      {
+        "id": "880e8400-e29b-41d4-a716-446655440001",
+        "title": "Sports Update: Championship Results",
+        "slug": "sports-update-championship-results",
+        "views": 4320,
+        "publishedAt": "2024-01-14T15:20:00.000Z",
+        "category": {
+          "id": "660e8400-e29b-41d4-a716-446655440001",
+          "nameEn": "Sports",
+          "nameIt": "Sport"
+        }
+      }
+    ],
+    "categoryBreakdown": [
+      {
+        "categoryId": "550e8400-e29b-41d4-a716-446655440000",
+        "category": {
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "nameEn": "Politics",
+          "nameIt": "Politica",
+          "slug": "politics"
+        },
+        "newsCount": 20,
+        "totalViews": 8500
+      },
+      {
+        "categoryId": "660e8400-e29b-41d4-a716-446655440001",
+        "category": {
+          "id": "660e8400-e29b-41d4-a716-446655440001",
+          "nameEn": "Sports",
+          "nameIt": "Sport",
+          "slug": "sports"
+        },
+        "newsCount": 18,
+        "totalViews": 4000
+      }
+    ]
+  }
+}
+```
+
+**Response Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| user | object | User information (id, name, email) |
+| overview | object | News counts by status for this user |
+| views.total | number | Total views for user's news |
+| views.average | number | Average views per published article |
+| recentActivity.newsLast7Days | number | User's news created in last 7 days |
+| recentActivity.newsLast30Days | number | User's news created in last 30 days |
+| topNews | array | User's top 10 performing news by views |
+| categoryBreakdown | array | User's news statistics grouped by category |
+
+**Example Requests:**
+
+**Get stats for authenticated user:**
+```bash
+curl -X GET https://api.tgcalabriareport.com/api/v1/crm/news/stats/user \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Get stats for specific user:**
+```bash
+curl -X GET https://api.tgcalabriareport.com/api/v1/crm/news/stats/user/880e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Error Responses:**
+
+**401 - Unauthorized:**
+```json
+{
+  "success": false,
+  "message": "Unauthorized",
+  "data": null
+}
+```
+
+**404 - User Not Found:**
+```json
+{
+  "success": false,
+  "message": "User not found",
+  "data": null
+}
+```
+
+---
+
 ## Complete Example Workflow
 
 ### Step 1: Register a User
@@ -459,6 +747,23 @@ curl -X POST https://api.tgcalabriareport.com/api/v1/crm/ads \
     "startDate": "2024-06-01T00:00:00.000Z",
     "endDate": "2024-08-31T23:59:59.999Z"
   }'
+```
+
+### Step 5: Get All News Statistics
+```bash
+curl -X GET https://api.tgcalabriareport.com/api/v1/crm/news/stats \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### Step 6: Get User News Statistics
+```bash
+# Get stats for authenticated user
+curl -X GET https://api.tgcalabriareport.com/api/v1/crm/news/stats/user \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Get stats for specific user
+curl -X GET https://api.tgcalabriareport.com/api/v1/crm/news/stats/user/880e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ---

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { newsController } from "@/controllers/news.controller";
 import { validate } from "@/middleware/validate";
 import { asyncHandler } from "@/middleware/asyncHandler";
-import { authGuard } from "@/middleware/authGuard";
+import { authGuard, optionalAuth } from "@/middleware/authGuard";
 import { ROLE } from "@/types/enums";
 import { createNewsValidator, updateNewsValidator } from "@/validators/news.validators";
 
@@ -42,7 +42,8 @@ const router = Router();
  *       200:
  *         description: List of news
  */
-router.get("/", asyncHandler(newsController.getAll));
+// Public route but supports optional authentication for Pro Loco/Editor to see their own news
+router.get("/", optionalAuth(), asyncHandler(newsController.getAll));
 
 /**
  * @openapi
@@ -85,8 +86,8 @@ router.get("/export", authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR]), as
  */
 router.get("/:idOrSlug", asyncHandler(newsController.getOne));
 
-// Protected Routes (Admin, Editor, Super Admin) - for all other protected endpoints
-router.use(authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR]));
+// Protected Routes (Admin, Editor, Super Admin, Pro Loco) - for all other protected endpoints
+router.use(authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR, ROLE.PROLOCO]));
 
 /**
  * @openapi

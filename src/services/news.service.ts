@@ -34,8 +34,11 @@ export class NewsService {
 
   /**
    * Get all news (Public/Filtered)
+   * @param query - Query parameters (page, limit, status, categoryId, etc.)
+   * @param userId - Optional user ID for filtering own news (for Pro Loco/Editor)
+   * @param userRole - Optional user role for permission checks
    */
-  async getAllNews(query: any) {
+  async getAllNews(query: any, userId?: string, userRole?: ROLE) {
     const {
       page = 1,
       limit = 10,
@@ -74,18 +77,28 @@ export class NewsService {
     // Note: 'status' param is usually passed by Admin. If no status passed, assume public feed?
     // Better approach: If no status is provided, default to PUBLISHED for public safety.
     // Admin UI should explicitly request status=DRAFT etc.
+    // Exception: Pro Loco and Editor users can see their own news with all statuses when authenticated
 
     if (!status) {
-      where.status = NEWS_STATUS.PUBLISHED;
-      // Also ensure publishedAt is in the past (handled by scheduledFor check logic usually)
-      // If we use 'publishedAt' as the release date:
-      where.publishedAt = { lte: now };
-
-      // If using scheduledFor logic:
-      // where.OR = [
-      //   { scheduledFor: null },
-      //   { scheduledFor: { lte: now } }
-      // ];
+      // If user is Pro Loco or Editor and userId is provided, allow them to see their own news with any status
+      // Otherwise, default to PUBLISHED for public safety
+      if ((userRole === ROLE.PROLOCO || userRole === ROLE.EDITOR) && userId) {
+        // Pro Loco/Editor users can see their own news with any status
+        // Filter by authorId to show only their own news
+        where.authorId = userId;
+        // Don't restrict by status - show all statuses for their own news
+      } else {
+        // Public access or no user - only show PUBLISHED
+        where.status = NEWS_STATUS.PUBLISHED;
+        // Also ensure publishedAt is in the past
+        where.publishedAt = { lte: now };
+      }
+    } else {
+      // Status is explicitly provided - apply it
+      // If user is Pro Loco/Editor and userId is provided, also filter by authorId to show only their own news
+      if ((userRole === ROLE.PROLOCO || userRole === ROLE.EDITOR) && userId) {
+        where.authorId = userId;
+      }
     }
 
     const [news, total] = await Promise.all([
@@ -121,39 +134,21 @@ export class NewsService {
     identifier: string,
     options?: { userId?: string; ipAddress?: string; userAgent?: string }
   ) {
-    // Check if identifier is a UUID (standard format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       identifier
     );
 
     // Try to find news by ID if it's a UUID, otherwise by slug
-    let news = null;
-    if (isUuid) {
-      news = await prisma.news.findUnique({
-        where: { id: identifier },
-        include: {
-          category: true,
-          author: { select: { id: true, name: true, avatar: true } },
-          gallery: true,
-        },
-      });
-    } else {
-      news = await prisma.news.findUnique({
-        where: { slug: identifier },
-        include: {
-          category: true,
-          author: { select: { id: true, name: true, avatar: true } },
-          gallery: true,
-        },
-      });
-    }
-
-    // If not found by the first method, try the other method as fallback
-    // This handles edge cases where a slug might look like a UUID or vice versa
-    if (!news) {
-      if (isUuid) {
-        // If UUID lookup failed, try slug (unlikely but possible)
-        news = await prisma.news.findUnique({
+    const news = isUuid
+      ? await prisma.news.findUnique({
+          where: { id: identifier },
+          include: {
+            category: true,
+            author: { select: { id: true, name: true, avatar: true } },
+            gallery: true,
+          },
+        })
+      : await prisma.news.findFirst({
           where: { slug: identifier },
           include: {
             category: true,
@@ -161,18 +156,6 @@ export class NewsService {
             gallery: true,
           },
         });
-      } else {
-        // If slug lookup failed, try ID (in case slug is actually a UUID)
-        news = await prisma.news.findUnique({
-          where: { id: identifier },
-          include: {
-            category: true,
-            author: { select: { id: true, name: true, avatar: true } },
-            gallery: true,
-          },
-        });
-      }
-    }
 
     if (!news) {
       const error: any = new Error("News article not found");
@@ -216,8 +199,18 @@ export class NewsService {
    * Create news
    */
   async createNews(data: any, userId: string) {
+    // Validate title length (check both character and byte length for UTF-8 safety)
+    if (data.title) {
+      const titleByteLength = Buffer.from(data.title, 'utf8').length;
+      
+      // Warn if byte length is very long
+      if (titleByteLength > 1800) {
+        logger.warn(`Title byte length (${titleByteLength}) is very long.`);
+      }
+    }
+    
     // Check slug uniqueness
-    const existing = await prisma.news.findUnique({ where: { slug: data.slug } });
+    const existing = await prisma.news.findFirst({ where: { slug: data.slug } });
     if (existing) {
       const error: any = new Error("A news article with this slug already exists. Please use a different slug.");
       error.statusCode = 409;
@@ -230,31 +223,13 @@ export class NewsService {
 
     // Check category permissions for Editor and Pro Loco
     // (This logic could be in controller or here)
-    let user;
-    try {
-      user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { 
-          allowedCategories: true,
-          prolocoAllowedCategories: true,
-        } as any,
-      });
-    } catch (error: any) {
-      // If _EditorCategories or _ProlocoCategories tables don't exist, get user without categories
-      if (error.message?.includes("_EditorCategories") || error.message?.includes("_ProlocoCategories") || error.message?.includes("does not exist")) {
-        logger.warn("Category relation tables not found, fetching user without categories");
-        user = await prisma.user.findUnique({
-          where: { id: userId },
-        });
-        // Add empty categories array to match expected structure
-        if (user) {
-          (user as any).allowedCategories = [];
-          (user as any).prolocoAllowedCategories = [];
-        }
-      } else {
-        throw error;
-      }
-    }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        allowedCategories: true,
+        prolocoAllowedCategories: true,
+      } as any,
+    });
 
     if (user?.role === ROLE.EDITOR) {
       const allowedCategories = (user as any).allowedCategories || [];
@@ -319,6 +294,11 @@ export class NewsService {
       }
     }
 
+    // Normalize YouTube URL if provided (keep as-is, validation is done in validator)
+    if (newsData.youtubeUrl) {
+      newsData.youtubeUrl = newsData.youtubeUrl.trim();
+    }
+
     // Use provided publishedAt if available, otherwise set to current date when publishing
     let publishedAtValue: Date | null = null;
     if (data.status === NEWS_STATUS.PUBLISHED) {
@@ -379,6 +359,16 @@ export class NewsService {
     const news = await prisma.news.findUnique({ where: { id } });
     if (!news) throw new Error("News not found");
 
+    // Validate title length if being updated (check both character and byte length for UTF-8 safety)
+    if (data.title !== undefined && data.title !== null) {
+      const titleByteLength = Buffer.from(data.title, 'utf8').length;
+      
+      // Warn if byte length is very long
+      if (titleByteLength > 1800) {
+        logger.warn(`Title byte length (${titleByteLength}) is very long.`);
+      }
+    }
+
     // Check permissions
     if (userRole === ROLE.EDITOR && news.authorId !== userId) {
       throw new Error("You can only edit your own articles");
@@ -391,31 +381,13 @@ export class NewsService {
 
       // Check editor permissions for new category
       if (userRole === ROLE.EDITOR) {
-        let user;
-        try {
-          user = await prisma.user.findUnique({
-            where: { id: userId },
-            include: { 
-              allowedCategories: true,
-              prolocoAllowedCategories: true,
-            },
-          });
-        } catch (error: any) {
-          // If _EditorCategories or _ProlocoCategories tables don't exist, get user without categories
-          if (error.message?.includes("_EditorCategories") || error.message?.includes("_ProlocoCategories") || error.message?.includes("does not exist")) {
-            logger.warn("Category relation tables not found, fetching user without categories");
-            user = await prisma.user.findUnique({
-              where: { id: userId },
-            });
-            // Add empty categories array to match expected structure
-            if (user) {
-              (user as any).allowedCategories = [];
-              (user as any).prolocoAllowedCategories = [];
-            }
-          } else {
-            throw error;
-          }
-        }
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          include: {
+            allowedCategories: true,
+            prolocoAllowedCategories: true,
+          },
+        });
 
         if (user) {
           if (user.role === ROLE.EDITOR) {
@@ -444,7 +416,7 @@ export class NewsService {
 
     // Check slug if changing
     if (data.slug) {
-      const existing = await prisma.news.findUnique({ where: { slug: data.slug } });
+      const existing = await prisma.news.findFirst({ where: { slug: data.slug } });
       if (existing && existing.id !== id) {
         const error: any = new Error("A news article with this slug already exists. Please use a different slug.");
         error.statusCode = 409;
@@ -486,6 +458,11 @@ export class NewsService {
       }
     }
 
+    // Normalize YouTube URL if provided
+    if (updateData.youtubeUrl !== undefined) {
+      updateData.youtubeUrl = updateData.youtubeUrl ? updateData.youtubeUrl.trim() : null;
+    }
+
     // Handle publishedAt: use provided value, or set to current date when publishing for first time, or keep existing
     let publishedAtValue = news.publishedAt;
     if (data.status === NEWS_STATUS.PUBLISHED) {
@@ -516,12 +493,16 @@ export class NewsService {
       await cacheService.invalidateSitemap();
     }
 
-    // Send breaking news alert if news status changed to PUBLISHED and is marked as breaking
+    // Send breaking news alert when: (1) newly published and breaking, or (2) already published but newly marked as breaking
     const isNowPublished =
       data.status === NEWS_STATUS.PUBLISHED && news.status !== NEWS_STATUS.PUBLISHED;
     const isBreaking = data.isBreaking !== undefined ? data.isBreaking : news.isBreaking;
+    const newlyMarkedBreaking =
+      news.status === NEWS_STATUS.PUBLISHED &&
+      data.isBreaking === true &&
+      !news.isBreaking;
 
-    if (isNowPublished && isBreaking) {
+    if ((isNowPublished && isBreaking) || newlyMarkedBreaking) {
       try {
         await breakingNewsService.sendBreakingNewsAlert(updatedNews.id);
       } catch (error) {

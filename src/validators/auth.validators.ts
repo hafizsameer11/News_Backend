@@ -79,7 +79,16 @@ export const prolocoLoginValidator = z.object({
     city: z.string().optional(),
     prolocoCode: z.string().optional(),
     password: z.string().min(6, "Password must be at least 6 characters"),
-  }),
+  }).refine(
+    (data) => {
+      // Must have either email OR (city AND prolocoCode)
+      return (data.email && !data.city && !data.prolocoCode) || 
+             (!data.email && data.city && data.prolocoCode);
+    },
+    {
+      message: "Must provide either email OR city and Pro Loco code",
+    }
+  ),
 });
 
 // Admin approve Pro Loco validator

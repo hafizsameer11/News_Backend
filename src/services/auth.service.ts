@@ -272,9 +272,11 @@ export class AuthService {
    * Verify email with token
    */
   async verifyEmail(token: string) {
-    // Check if email verification is enabled
+    // Check if email verification is enabled (return 400, not 500)
     if (!env.ENABLE_EMAIL_VERIFICATION) {
-      throw new Error("Email verification is disabled");
+      const err = new Error("Email verification is disabled");
+      (err as any).statusCode = 400;
+      throw err;
     }
 
     if (!token) {
@@ -317,9 +319,11 @@ export class AuthService {
    * Resend verification email
    */
   async resendVerificationEmail(userId: string) {
-    // Check if email verification is enabled
+    // Check if email verification is enabled (return 400, not 500)
     if (!env.ENABLE_EMAIL_VERIFICATION) {
-      throw new Error("Email verification is disabled");
+      const err = new Error("Email verification is disabled");
+      (err as any).statusCode = 400;
+      throw err;
     }
 
     const user = await prisma.user.findUnique({
@@ -331,7 +335,9 @@ export class AuthService {
     }
 
     if (user.emailVerified) {
-      throw new Error("Email already verified");
+      const err = new Error("Email already verified");
+      (err as any).statusCode = 400;
+      throw err;
     }
 
     // Generate new verification token

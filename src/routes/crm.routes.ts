@@ -206,4 +206,142 @@ router.post(
   asyncHandler(crmController.createAd)
 );
 
+/**
+ * @openapi
+ * /crm/news/stats:
+ *   get:
+ *     tags: [CRM]
+ *     summary: Get all news statistics
+ *     description: Returns comprehensive aggregate statistics about all news articles including counts, views, top performing news, and category breakdown.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: News statistics retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     overview:
+ *                       type: object
+ *                       properties:
+ *                         total:
+ *                           type: number
+ *                         published:
+ *                           type: number
+ *                         draft:
+ *                           type: number
+ *                         pending:
+ *                           type: number
+ *                         rejected:
+ *                           type: number
+ *                         featured:
+ *                           type: number
+ *                         breaking:
+ *                           type: number
+ *                     views:
+ *                       type: object
+ *                       properties:
+ *                         total:
+ *                           type: number
+ *                         average:
+ *                           type: number
+ *                         last7Days:
+ *                           type: number
+ *                         last30Days:
+ *                           type: number
+ *                     recentActivity:
+ *                       type: object
+ *                       properties:
+ *                         newsLast7Days:
+ *                           type: number
+ *                         newsLast30Days:
+ *                           type: number
+ *                     topNews:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                     categoryBreakdown:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *       401:
+ *         description: Unauthorized - CRM access required
+ */
+router.get(
+  "/news/stats",
+  authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR, ROLE.ADVERTISER]),
+  asyncHandler(crmController.getAllNewsStats)
+);
+
+/**
+ * @openapi
+ * /crm/news/stats/user/{userId}:
+ *   get:
+ *     tags: [CRM]
+ *     summary: Get news statistics for a specific user
+ *     description: Returns statistics about news articles created by a specific user. If userId is not provided in URL, returns stats for the authenticated user.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         required: false
+ *         description: User ID. If not provided, uses authenticated user's ID.
+ *     responses:
+ *       200:
+ *         description: User news statistics retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                         name:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                     overview:
+ *                       type: object
+ *                     views:
+ *                       type: object
+ *                     recentActivity:
+ *                       type: object
+ *                     topNews:
+ *                       type: array
+ *                     categoryBreakdown:
+ *                       type: array
+ *       401:
+ *         description: Unauthorized - CRM access required
+ *       404:
+ *         description: User not found
+ */
+router.get(
+  "/news/stats/user/:userId?",
+  authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR, ROLE.ADVERTISER]),
+  asyncHandler(crmController.getUserNewsStats)
+);
+
 export default router;

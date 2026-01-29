@@ -7,10 +7,10 @@ import { ROLE } from "@/types/enums";
 
 const router = Router();
 
-// Upload and list routes - allow ADVERTISER, ADMIN, SUPER_ADMIN, EDITOR
+// Upload and list routes - allow ADVERTISER, ADMIN, SUPER_ADMIN, EDITOR, PROLOCO
 router.post(
   "/upload",
-  authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR, ROLE.ADVERTISER]),
+  authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR, ROLE.ADVERTISER, ROLE.PROLOCO]),
   (req, res, next) => {
     upload.single("file")(req, res, (err) => {
       if (err) {
@@ -52,7 +52,7 @@ router.post(
 
 router.get(
   "/",
-  authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR, ROLE.ADVERTISER]),
+  authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR, ROLE.ADVERTISER, ROLE.PROLOCO]),
   asyncHandler(mediaController.getAll)
 );
 
@@ -63,10 +63,10 @@ router.patch(
   asyncHandler(mediaController.updateStatus)
 );
 
-// Delete route - admin/editor can delete any, advertiser can delete their own
+// Delete route - admin/editor can delete any, advertiser/proloco can delete their own
 router.delete(
   "/:id",
-  authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR, ROLE.ADVERTISER]),
+  authGuard([ROLE.ADMIN, ROLE.SUPER_ADMIN, ROLE.EDITOR, ROLE.ADVERTISER, ROLE.PROLOCO]),
   asyncHandler(mediaController.delete)
 );
 

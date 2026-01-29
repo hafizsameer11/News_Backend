@@ -16,6 +16,17 @@ export class BreakingNewsService {
     error?: string;
   }> {
     try {
+      if (!emailService.isConfigured()) {
+        logger.warn(
+          "Breaking news email not sent: email service is not configured (set RESEND_API_KEY or SMTP_* env vars)"
+        );
+        return {
+          success: false,
+          recipientCount: 0,
+          error: "Email service is not configured",
+        };
+      }
+
       // Check if alert already sent for this news
       const existingAlert = await prisma.breakingNewsAlert.findUnique({
         where: { newsId },

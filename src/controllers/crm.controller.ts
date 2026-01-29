@@ -35,4 +35,21 @@ export const crmController = {
     const result = await crmService.createAd(req.body, req.user.id);
     return successResponse(res, "Ad created and auto-approved successfully", result, 201);
   },
+
+  getAllNewsStats: async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      return errorResponse(res, "Unauthorized", null, 401);
+    }
+    const result = await crmService.getAllNewsStats();
+    return successResponse(res, "News statistics retrieved successfully", result);
+  },
+
+  getUserNewsStats: async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      return errorResponse(res, "Unauthorized", null, 401);
+    }
+    const userId = req.params.userId || req.user.id; // Use param if provided, otherwise current user
+    const result = await crmService.getUserNewsStats(userId);
+    return successResponse(res, "User news statistics retrieved successfully", result);
+  },
 };

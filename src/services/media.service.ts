@@ -43,8 +43,8 @@ export class MediaService {
     };
 
     // Determine processing status based on user role and media type
-    // Only Admins and Super Admins can auto-approve, others need approval
-    const canAutoApprove = uploaderRole === "ADMIN" || uploaderRole === "SUPER_ADMIN";
+    // Admins, Super Admins, and Pro Loco can auto-approve images
+    const canAutoApprove = uploaderRole === "ADMIN" || uploaderRole === "SUPER_ADMIN" || uploaderRole === "PROLOCO";
 
     if (type === MediaType.VIDEO) {
       // For videos, set processing status to PENDING (always needs processing)

@@ -19,18 +19,10 @@ export const createApp = (): Express => {
   const app = express();
 
   // CORS MUST be first - before any other middleware
-  // CORS configuration - allow all origins
-  // When credentials: true, we must reflect the specific origin, not use "*"
+  // Allow requests from any origin (e.g. app.leox24.com, app.tgcalabriareport.com, etc.)
   app.use(
     cors({
-      origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps, Postman, etc.)
-        if (!origin) {
-          return callback(null, true);
-        }
-        // Allow all origins
-        callback(null, true);
-      },
+      origin: true, // Reflect request origin — allows any origin
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
       allowedHeaders: [
@@ -49,6 +41,31 @@ export const createApp = (): Express => {
       maxAge: 86400, // 24 hours
     })
   );
+
+  // Handle preflight OPTIONS immediately so CORS headers are always sent
+  app.use((req, res, next) => {
+    if (req.method === "OPTIONS") {
+      const origin = req.headers.origin;
+      if (origin) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+      } else {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+      }
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
+      );
+      res.setHeader("Access-Control-Expose-Headers", "Content-Range, X-Content-Range, Content-Length");
+      res.setHeader("Access-Control-Max-Age", "86400");
+      res.setHeader("Referrer-Policy", "unsafe-url");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      res.sendStatus(204);
+      return;
+    }
+    return next();
+  });
 
   // Additional CORS middleware layer - ensures headers are set even if first layer misses
   app.use((req, res, next) => {
@@ -114,28 +131,6 @@ export const createApp = (): Express => {
 
   // Compression middleware
   app.use(compression());
-
-  // Handle preflight requests explicitly for all routes (must be after CORS setup)
-  app.options("*", (req, res) => {
-    // Set most permissive Referrer-Policy
-    res.setHeader("Referrer-Policy", "unsafe-url");
-    
-    const origin = req.headers.origin;
-    if (origin) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Access-Control-Allow-Credentials", "true");
-    } else {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-    }
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-CSRF-Token, Cache-Control, Pragma"
-    );
-    res.setHeader("Access-Control-Max-Age", "86400");
-    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-    res.sendStatus(204);
-  });
 
   // Documentation
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));

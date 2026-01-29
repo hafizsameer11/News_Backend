@@ -46,6 +46,13 @@ const getStripe = () => {
   return stripeInstance;
 };
 
+/** Ensure price is a plain number in API responses (Prisma Decimal becomes {s,e,d} in JSON) */
+function serializeAdPrice<T extends { price?: unknown }>(ad: T): T {
+  if (!ad || typeof ad !== "object") return ad;
+  const num = ad.price != null ? Number(ad.price) : null;
+  return { ...ad, price: num } as T;
+}
+
 export class AdService {
   /**
    * Get Ads (Public/Advertiser/Admin)
@@ -63,28 +70,34 @@ export class AdService {
 
     // Slot-based filtering (for public ad retrieval)
     if (slot) {
-      // Map slot to ad type (for ads with position: null)
-      // This allows backward compatibility with ads that only have type set
+      // Map slot to ad type (for ads with position: null) - only used when position is not set
+      // MID_PAGE and BETWEEN_SECTIONS_* use position-only so one ad can be placed per slot (4 different inline spots)
       const slotToTypeMap: Record<string, string[]> = {
         HEADER: ["BANNER_TOP"],
-        TOP_BANNER: ["BANNER_TOP", "SLIDER", "SLIDER_TOP"], // TOP_BANNER can be banner, slider, or slider top
+        TOP_BANNER: ["BANNER_TOP"], // Only banner top; SLIDER/SLIDER_TOP use type-based fetch
         SIDEBAR: ["BANNER_SIDE"],
         INLINE: ["INLINE"],
         FOOTER: ["FOOTER"],
-        MID_PAGE: ["INLINE", "BANNER_TOP"],
-        BETWEEN_SECTIONS: ["INLINE", "BANNER_TOP"],
+        MID_PAGE: [], // position-only: only ads with position MID_PAGE
+        BETWEEN_SECTIONS: [], // legacy; use BETWEEN_SECTIONS_1/2/3
+        BETWEEN_SECTIONS_1: [],
+        BETWEEN_SECTIONS_2: [],
+        BETWEEN_SECTIONS_3: [],
         MOBILE: ["BANNER_SIDE", "BANNER_TOP", "INLINE"],
       };
 
-      // Map slot to position values
+      // Map slot to position values - each slot shows only ads with that position
       const slotToPositionMap: Record<string, string[]> = {
         HEADER: ["HEADER"],
         TOP_BANNER: ["TOP_BANNER", "HEADER"],
         SIDEBAR: ["SIDEBAR"],
         INLINE: ["INLINE", "INLINE_ARTICLE"],
         FOOTER: ["FOOTER"],
-        MID_PAGE: ["MID_PAGE", "INLINE", "INLINE_ARTICLE"],
-        BETWEEN_SECTIONS: ["BETWEEN_SECTIONS", "INLINE", "INLINE_ARTICLE"],
+        MID_PAGE: ["MID_PAGE"],
+        BETWEEN_SECTIONS: ["BETWEEN_SECTIONS"],
+        BETWEEN_SECTIONS_1: ["BETWEEN_SECTIONS_1"],
+        BETWEEN_SECTIONS_2: ["BETWEEN_SECTIONS_2"],
+        BETWEEN_SECTIONS_3: ["BETWEEN_SECTIONS_3"],
         MOBILE: ["MOBILE"],
       };
 
@@ -192,9 +205,16 @@ export class AdService {
 
       // For SLIDER or SLIDER_TOP type, return array; otherwise return single ad
       if (selectedAd.type === "SLIDER" || selectedAd.type === "SLIDER_TOP") {
-        // Return multiple ads for slider (up to limit)
-        ads = matchingAds.slice(0, Number(limit));
-        total = matchingAds.length;
+        // For SLIDER_TOP, limit to maximum 2 ads
+        // For SLIDER, return up to limit
+        if (selectedAd.type === "SLIDER_TOP") {
+          ads = matchingAds.slice(0, Math.min(2, Number(limit))); // Max 2 SLIDER_TOP ads
+          total = Math.min(2, matchingAds.length);
+        } else {
+          // Regular SLIDER ads - return up to limit
+          ads = matchingAds.slice(0, Number(limit));
+          total = matchingAds.length;
+        }
       } else {
         ads = [selectedAd];
         total = 1;
@@ -226,7 +246,7 @@ export class AdService {
     }
 
     return {
-      ads,
+      ads: ads.map(serializeAdPrice),
       meta: {
         total,
         page: Number(page),
@@ -283,9 +303,44 @@ export class AdService {
     if (data.price !== undefined && data.price !== null && data.price !== "") {
       // Handle both string and number inputs
       if (typeof data.price === "string") {
-        // Remove any currency symbols, commas, or spaces
-        const cleanedPrice = data.price.replace(/[€$£,\s]/g, "").trim();
+        // Handle both European (comma) and US (dot) decimal formats
+        let cleanedPrice = data.price.replace(/[€$£\s]/g, "").trim();
+        
+        // Determine format and parse correctly
+        const commaCount = (cleanedPrice.match(/,/g) || []).length;
+        const dotCount = (cleanedPrice.match(/\./g) || []).length;
+        
+        if (commaCount === 1 && !cleanedPrice.includes(".")) {
+          // Single comma, no dot - European format: 400,00 or 155000,00
+          cleanedPrice = cleanedPrice.replace(",", ".");
+        } else if (commaCount === 1 && dotCount === 1) {
+          // One comma and one dot - determine which is decimal separator
+          const commaIndex = cleanedPrice.indexOf(",");
+          const dotIndex = cleanedPrice.indexOf(".");
+          if (commaIndex > dotIndex) {
+            // Format: 1.234,56 -> 1234.56 (European - dot is thousands, comma is decimal)
+            cleanedPrice = cleanedPrice.replace(/\./g, "").replace(",", ".");
+          } else {
+            // Format: 1,234.56 -> 1234.56 (US - comma is thousands, dot is decimal)
+            cleanedPrice = cleanedPrice.replace(/,/g, "");
+          }
+        } else if (commaCount > 1 && !cleanedPrice.includes(".")) {
+          // Multiple commas, no dots - European format with thousands: 155.000,00
+          // Last comma is decimal separator, others are thousands
+          const lastCommaIndex = cleanedPrice.lastIndexOf(",");
+          const beforeLastComma = cleanedPrice.substring(0, lastCommaIndex).replace(/,/g, "");
+          const afterLastComma = cleanedPrice.substring(lastCommaIndex + 1);
+          cleanedPrice = beforeLastComma + "." + afterLastComma;
+        } else {
+          // No commas or only dots - treat as US format
+          cleanedPrice = cleanedPrice.replace(/,/g, "").replace(/[^0-9.]/g, "");
+        }
+        
         priceValue = parseFloat(cleanedPrice);
+        
+        if (isNaN(priceValue) || priceValue < 0 || !isFinite(priceValue)) {
+          throw new Error("Price must be a valid positive number");
+        }
       } else if (typeof data.price === "number") {
         priceValue = data.price;
       } else {
@@ -414,11 +469,32 @@ export class AdService {
 
     // Handle price conversion - Decimal(10, 2) can store up to 99,999,999.99
     if (priceWasProvided) {
-      // Convert to number if it's a string, removing any currency symbols
+      // Convert to number if it's a string, handling both European and US formats
       let priceValue: number;
       if (typeof updateData.price === "string") {
-        // Remove any currency symbols, commas, or spaces
-        const cleanedPrice = updateData.price.replace(/[€$£,\s]/g, "").trim();
+        // Handle both European (comma) and US (dot) decimal formats
+        let cleanedPrice = updateData.price.replace(/[€$£\s]/g, "").trim();
+        
+        // If comma is present, treat it as European decimal separator
+        if (cleanedPrice.includes(",") && !cleanedPrice.includes(".")) {
+          // European format: 400,00 -> 400.00
+          cleanedPrice = cleanedPrice.replace(",", ".");
+        } else if (cleanedPrice.includes(",") && cleanedPrice.includes(".")) {
+          // Mixed format: determine which is decimal separator
+          const commaIndex = cleanedPrice.indexOf(",");
+          const dotIndex = cleanedPrice.indexOf(".");
+          if (commaIndex > dotIndex) {
+            // Format: 1.234,56 -> 1234.56 (European)
+            cleanedPrice = cleanedPrice.replace(/\./g, "").replace(",", ".");
+          } else {
+            // Format: 1,234.56 -> 1234.56 (US)
+            cleanedPrice = cleanedPrice.replace(/,/g, "");
+          }
+        } else {
+          // Only dots or no separators - remove any non-numeric except dot
+          cleanedPrice = cleanedPrice.replace(/[^0-9.]/g, "");
+        }
+        
         priceValue = parseFloat(cleanedPrice);
       } else {
         priceValue = updateData.price;
@@ -497,7 +573,7 @@ export class AdService {
       updateData.price = processedPrice;
     }
 
-    return await prisma.ad.update({
+    const updated = await prisma.ad.update({
       where: { id },
       data: updateData,
       include: {
@@ -511,6 +587,7 @@ export class AdService {
         },
       },
     });
+    return serializeAdPrice(updated);
   }
 
   /**
@@ -556,7 +633,7 @@ export class AdService {
       }
     }
 
-    return updatedAd;
+    return serializeAdPrice(updatedAd);
   }
 
   /**
@@ -598,7 +675,7 @@ export class AdService {
       }
     }
 
-    return updatedAd;
+    return serializeAdPrice(updatedAd);
   }
 
   /**
@@ -645,10 +722,11 @@ export class AdService {
       throw new Error("Only ACTIVE ads can be paused");
     }
 
-    return await prisma.ad.update({
+    const updated = await prisma.ad.update({
       where: { id: adId },
       data: { status: "PAUSED" },
     });
+    return serializeAdPrice(updated);
   }
 
   /**
@@ -675,16 +753,18 @@ export class AdService {
 
     if (ad.startDate > now) {
       // Ad hasn't started yet, keep as PENDING or ACTIVE based on payment
-      return await prisma.ad.update({
+      const u = await prisma.ad.update({
         where: { id: adId },
         data: { status: ad.isPaid ? "ACTIVE" : "PENDING" },
       });
+      return serializeAdPrice(u);
     }
 
-    return await prisma.ad.update({
+    const u = await prisma.ad.update({
       where: { id: adId },
       data: { status: "ACTIVE" },
     });
+    return serializeAdPrice(u);
   }
 
   /**

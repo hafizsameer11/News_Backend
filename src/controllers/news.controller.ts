@@ -18,8 +18,11 @@ function getClientIp(req: Request): string | undefined {
 }
 
 export const newsController = {
-  getAll: async (req: Request, res: Response) => {
-    const result = await newsService.getAllNews(req.query);
+  getAll: async (req: Request | AuthenticatedRequest, res: Response) => {
+    // Pass user info to service if authenticated (for role-based filtering)
+    const userId = (req as AuthenticatedRequest).user?.id;
+    const userRole = (req as AuthenticatedRequest).user?.role;
+    const result = await newsService.getAllNews(req.query, userId, userRole);
     return successResponse(res, "News retrieved", result);
   },
 

@@ -53,7 +53,7 @@ export class SEOService {
     return await cacheService.getOrSet(
       cacheKey,
       async () => {
-        const news = await prisma.news.findUnique({
+        const news = await prisma.news.findFirst({
           where: { slug: newsSlug },
           include: {
             author: {
@@ -68,7 +68,7 @@ export class SEOService {
               },
             },
           },
-        });
+        }) as any;
 
         if (!news || news.status !== NEWS_STATUS.PUBLISHED) {
           throw new Error("News article not found or not published");
@@ -85,7 +85,7 @@ export class SEOService {
           try {
             keywords = JSON.parse(news.tags);
           } catch {
-            keywords = news.tags.split(",").map((tag) => tag.trim());
+            keywords = news.tags.split(",").map((tag: string) => tag.trim());
           }
         }
         keywords.push(news.category.nameEn, news.category.nameIt);

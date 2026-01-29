@@ -26,6 +26,19 @@ export const crmCreateNewsValidator = z.object({
     isBreaking: z.boolean().optional().default(false),
     tags: z.array(z.string()).optional(),
     mainImage: z.string().url("Invalid image URL").optional(),
+    youtubeUrl: z
+      .string()
+      .url("YouTube URL is invalid")
+      .refine(
+        (url) => {
+          if (!url) return true; // Optional field
+          // Check if it's a YouTube URL
+          const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/;
+          return youtubeRegex.test(url);
+        },
+        { message: "Must be a valid YouTube URL (youtube.com or youtu.be)" }
+      )
+      .optional(),
   }),
 });
 

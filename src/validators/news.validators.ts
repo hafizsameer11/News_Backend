@@ -3,7 +3,7 @@ import { NEWS_STATUS } from "@/types/enums";
 
 export const createNewsValidator = z.object({
   body: z.object({
-    title: z.string().min(5, "Title must be at least 5 characters").max(500, "Title must not exceed 500 characters"),
+    title: z.string().min(5, "Title must be at least 5 characters"),
     slug: z
       .string()
       .min(5)
@@ -11,7 +11,20 @@ export const createNewsValidator = z.object({
     summary: z.string().min(10, "Summary is required"),
     content: z.string().min(20, "Content is required"),
     categoryId: z.string().uuid("Category ID must be a valid UUID"),
-    mainImage: z.string().url("Main image URL is invalid").optional(),
+    mainImage: z.string().optional(),
+    youtubeUrl: z
+      .string()
+      .url("YouTube URL is invalid")
+      .refine(
+        (url) => {
+          if (!url) return true; // Optional field
+          // Check if it's a YouTube URL
+          const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/;
+          return youtubeRegex.test(url);
+        },
+        { message: "Must be a valid YouTube URL (youtube.com or youtu.be)" }
+      )
+      .optional(),
     tags: z.string().optional(),
     status: z.nativeEnum(NEWS_STATUS).optional().default(NEWS_STATUS.DRAFT),
     isBreaking: z.boolean().optional(),
@@ -27,7 +40,7 @@ export const updateNewsValidator = z.object({
     id: z.string().uuid(),
   }),
   body: z.object({
-    title: z.string().min(5, "Title must be at least 5 characters").max(500, "Title must not exceed 500 characters").optional(),
+    title: z.string().min(5, "Title must be at least 5 characters").optional(),
     slug: z
       .string()
       .min(5)
@@ -36,7 +49,7 @@ export const updateNewsValidator = z.object({
     summary: z.string().min(10).optional(),
     content: z.string().min(20).optional(),
     categoryId: z.string().uuid().optional(),
-    mainImage: z.string().url().optional(),
+    mainImage: z.string().optional(),
     tags: z.string().optional(),
     status: z.nativeEnum(NEWS_STATUS).optional(),
     isBreaking: z.boolean().optional(),

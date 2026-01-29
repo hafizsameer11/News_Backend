@@ -192,15 +192,16 @@ model Category {
 
 model News {
   id      String @id @default(uuid())
-  title   String @db.VarChar(500) // Increased from default VARCHAR(255) to support longer titles
-  slug    String @unique
+  title   String @db.Text // Changed from VarChar(500) to support unlimited length
+  slug    String @db.Text // Changed from unique String to support long slugs and avoid unique constraint issues with Text
   summary String @db.Text
   content String @db.LongText
 
   language Language @default(IT) // Default to Italian for Calabria
 
   // Media
-  mainImage String? // URL
+  mainImage String? // URL (image, video, or YouTube URL)
+  youtubeUrl String? // YouTube video URL (optional, for YouTube embeds)
   gallery   Media[]
 
   // Metadata

@@ -94,6 +94,7 @@ export class CrmService {
       isBreaking?: boolean;
       tags?: string[];
       mainImage?: string;
+      youtubeUrl?: string;
     },
     userId: string
   ) {
@@ -152,6 +153,7 @@ export class CrmService {
         isBreaking: data.isBreaking || false,
         tags: data.tags ? JSON.stringify(data.tags) : null,
         mainImage: data.mainImage || null,
+        youtubeUrl: data.youtubeUrl ? data.youtubeUrl.trim() : null,
         publishedAt,
         authorId: userId,
       },
@@ -266,6 +268,311 @@ export class CrmService {
     logger.info(`CRM: Ad created and auto-approved via CRM - ${ad.title} by user ${userId}`);
 
     return ad;
+  }
+
+  /**
+   * Get all news statistics (aggregate)
+   * Returns comprehensive stats about all news articles
+   */
+  async getAllNewsStats() {
+    const now = new Date();
+    const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Get basic counts
+    const [
+      totalNews,
+      publishedNews,
+      draftNews,
+      pendingNews,
+      rejectedNews,
+      featuredNews,
+      breakingNews,
+      totalViews,
+      newsLast7Days,
+      newsLast30Days,
+      viewsLast7Days,
+      viewsLast30Days,
+    ] = await Promise.all([
+      prisma.news.count(),
+      prisma.news.count({ where: { status: NEWS_STATUS.PUBLISHED } }),
+      prisma.news.count({ where: { status: NEWS_STATUS.DRAFT } }),
+      prisma.news.count({ where: { status: NEWS_STATUS.PENDING_REVIEW } }),
+      prisma.news.count({ where: { status: NEWS_STATUS.REJECTED } }),
+      prisma.news.count({ where: { isFeatured: true } }),
+      prisma.news.count({ where: { isBreaking: true } }),
+      prisma.news.aggregate({
+        _sum: { views: true },
+      }),
+      prisma.news.count({
+        where: { createdAt: { gte: last7Days } },
+      }),
+      prisma.news.count({
+        where: { createdAt: { gte: last30Days } },
+      }),
+      prisma.newsViewLog.count({
+        where: { viewedAt: { gte: last7Days } },
+      }),
+      prisma.newsViewLog.count({
+        where: { viewedAt: { gte: last30Days } },
+      }),
+    ]);
+
+    // Get top performing news (by views)
+    const topNews = await prisma.news.findMany({
+      take: 10,
+      where: { status: NEWS_STATUS.PUBLISHED },
+      orderBy: { views: "desc" },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        views: true,
+        publishedAt: true,
+        category: {
+          select: {
+            id: true,
+            nameEn: true,
+            nameIt: true,
+          },
+        },
+        author: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    // Get category breakdown
+    const categoryStats = await prisma.news.groupBy({
+      by: ["categoryId"],
+      where: { status: NEWS_STATUS.PUBLISHED },
+      _count: {
+        id: true,
+      },
+      _sum: {
+        views: true,
+      },
+    });
+
+    // Get category names
+    const categoryIds = categoryStats.map((stat) => stat.categoryId);
+    const categories = await prisma.category.findMany({
+      where: { id: { in: categoryIds } },
+      select: {
+        id: true,
+        nameEn: true,
+        nameIt: true,
+        slug: true,
+      },
+    });
+
+    const categoryMap = new Map(categories.map((cat) => [cat.id, cat]));
+    const categoryBreakdown = categoryStats.map((stat) => ({
+      categoryId: stat.categoryId,
+      category: categoryMap.get(stat.categoryId) || null,
+      newsCount: stat._count.id,
+      totalViews: stat._sum.views || 0,
+    }));
+
+    // Calculate averages
+    const averageViews = publishedNews > 0 ? Math.round((totalViews._sum.views || 0) / publishedNews) : 0;
+
+    return {
+      overview: {
+        total: totalNews,
+        published: publishedNews,
+        draft: draftNews,
+        pending: pendingNews,
+        rejected: rejectedNews,
+        featured: featuredNews,
+        breaking: breakingNews,
+      },
+      views: {
+        total: totalViews._sum.views || 0,
+        average: averageViews,
+        last7Days: viewsLast7Days,
+        last30Days: viewsLast30Days,
+      },
+      recentActivity: {
+        newsLast7Days,
+        newsLast30Days,
+      },
+      topNews: topNews.map((news) => ({
+        id: news.id,
+        title: news.title,
+        slug: news.slug,
+        views: news.views,
+        publishedAt: news.publishedAt,
+        category: news.category,
+        author: news.author,
+      })),
+      categoryBreakdown: categoryBreakdown.sort((a, b) => b.totalViews - a.totalViews),
+    };
+  }
+
+  /**
+   * Get news statistics for a specific user
+   * Returns stats about news articles created by the specified user
+   */
+  async getUserNewsStats(userId: string) {
+    const now = new Date();
+    const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Get basic counts for this user
+    const [
+      totalNews,
+      publishedNews,
+      draftNews,
+      pendingNews,
+      rejectedNews,
+      featuredNews,
+      breakingNews,
+      totalViews,
+      newsLast7Days,
+      newsLast30Days,
+    ] = await Promise.all([
+      prisma.news.count({ where: { authorId: userId } }),
+      prisma.news.count({
+        where: { authorId: userId, status: NEWS_STATUS.PUBLISHED },
+      }),
+      prisma.news.count({
+        where: { authorId: userId, status: NEWS_STATUS.DRAFT },
+      }),
+      prisma.news.count({
+        where: { authorId: userId, status: NEWS_STATUS.PENDING_REVIEW },
+      }),
+      prisma.news.count({
+        where: { authorId: userId, status: NEWS_STATUS.REJECTED },
+      }),
+      prisma.news.count({
+        where: { authorId: userId, isFeatured: true },
+      }),
+      prisma.news.count({
+        where: { authorId: userId, isBreaking: true },
+      }),
+      prisma.news.aggregate({
+        where: { authorId: userId },
+        _sum: { views: true },
+      }),
+      prisma.news.count({
+        where: {
+          authorId: userId,
+          createdAt: { gte: last7Days },
+        },
+      }),
+      prisma.news.count({
+        where: {
+          authorId: userId,
+          createdAt: { gte: last30Days },
+        },
+      }),
+    ]);
+
+    // Get user's top performing news
+    const topNews = await prisma.news.findMany({
+      take: 10,
+      where: {
+        authorId: userId,
+        status: NEWS_STATUS.PUBLISHED,
+      },
+      orderBy: { views: "desc" },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        views: true,
+        publishedAt: true,
+        category: {
+          select: {
+            id: true,
+            nameEn: true,
+            nameIt: true,
+          },
+        },
+      },
+    });
+
+    // Get category breakdown for this user
+    const categoryStats = await prisma.news.groupBy({
+      by: ["categoryId"],
+      where: {
+        authorId: userId,
+        status: NEWS_STATUS.PUBLISHED,
+      },
+      _count: {
+        id: true,
+      },
+      _sum: {
+        views: true,
+      },
+    });
+
+    // Get category names
+    const categoryIds = categoryStats.map((stat) => stat.categoryId);
+    const categories = await prisma.category.findMany({
+      where: { id: { in: categoryIds } },
+      select: {
+        id: true,
+        nameEn: true,
+        nameIt: true,
+        slug: true,
+      },
+    });
+
+    const categoryMap = new Map(categories.map((cat) => [cat.id, cat]));
+    const categoryBreakdown = categoryStats.map((stat) => ({
+      categoryId: stat.categoryId,
+      category: categoryMap.get(stat.categoryId) || null,
+      newsCount: stat._count.id,
+      totalViews: stat._sum.views || 0,
+    }));
+
+    // Calculate averages
+    const averageViews = publishedNews > 0 ? Math.round((totalViews._sum.views || 0) / publishedNews) : 0;
+
+    // Get user info
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    return {
+      user: user || null,
+      overview: {
+        total: totalNews,
+        published: publishedNews,
+        draft: draftNews,
+        pending: pendingNews,
+        rejected: rejectedNews,
+        featured: featuredNews,
+        breaking: breakingNews,
+      },
+      views: {
+        total: totalViews._sum.views || 0,
+        average: averageViews,
+      },
+      recentActivity: {
+        newsLast7Days,
+        newsLast30Days,
+      },
+      topNews: topNews.map((news) => ({
+        id: news.id,
+        title: news.title,
+        slug: news.slug,
+        views: news.views,
+        publishedAt: news.publishedAt,
+        category: news.category,
+      })),
+      categoryBreakdown: categoryBreakdown.sort((a, b) => b.totalViews - a.totalViews),
+    };
   }
 }
 

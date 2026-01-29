@@ -25,7 +25,7 @@ export class StructuredDataService {
     return await cacheService.getOrSet(
       cacheKey,
       async () => {
-        const news = await prisma.news.findUnique({
+        const news = await prisma.news.findFirst({
           where: { slug: newsSlug },
           include: {
             author: {
@@ -44,7 +44,7 @@ export class StructuredDataService {
               },
             },
           },
-        });
+        }) as any;
 
         if (!news || news.status !== NEWS_STATUS.PUBLISHED) {
           throw new Error("News article not found or not published");
@@ -59,7 +59,7 @@ export class StructuredDataService {
           try {
             keywords = JSON.parse(news.tags);
           } catch {
-            keywords = news.tags.split(",").map((tag) => tag.trim());
+            keywords = news.tags.split(",").map((tag: string) => tag.trim());
           }
         }
         keywords.push(news.category.nameEn, news.category.nameIt);
