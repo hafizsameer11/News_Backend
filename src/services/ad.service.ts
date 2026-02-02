@@ -203,16 +203,18 @@ export class AdService {
         }
       }
 
-      // For SLIDER or SLIDER_TOP type, return array; otherwise return single ad
-      if (selectedAd.type === "SLIDER" || selectedAd.type === "SLIDER_TOP") {
-        // For SLIDER_TOP, limit to maximum 2 ads
-        // For SLIDER, return up to limit
+      // Slots that can show multiple ads: return up to limit; others return single (weighted random)
+      const multiAdSlots = ["FOOTER", "SIDEBAR", "MOBILE", "TOP_BANNER", "HEADER", "INLINE", "MID_PAGE", "BETWEEN_SECTIONS", "BETWEEN_SECTIONS_1", "BETWEEN_SECTIONS_2", "BETWEEN_SECTIONS_3"];
+      const requestLimit = Number(limit) || 2;
+      if (multiAdSlots.includes(slot) && requestLimit > 1) {
+        ads = matchingAds.slice(0, requestLimit);
+        total = matchingAds.length;
+      } else if (selectedAd.type === "SLIDER" || selectedAd.type === "SLIDER_TOP") {
         if (selectedAd.type === "SLIDER_TOP") {
-          ads = matchingAds.slice(0, Math.min(2, Number(limit))); // Max 2 SLIDER_TOP ads
+          ads = matchingAds.slice(0, Math.min(2, requestLimit));
           total = Math.min(2, matchingAds.length);
         } else {
-          // Regular SLIDER ads - return up to limit
-          ads = matchingAds.slice(0, Number(limit));
+          ads = matchingAds.slice(0, requestLimit);
           total = matchingAds.length;
         }
       } else {
